@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Camera Dashboard</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <header>
+    <h1>Camera Monitoring Dashboard</h1>
+  </header>
+
+  <main>
+    <section id="camera-controls">
+      <h2>Controls</h2>
+      <div class="control-buttons">
+        <button id="refresh-feed">Refresh Feed</button>
+        <button id="toggle-night-vision">Toggle Night Vision</button>
+        <button id="toggle-autofocus">Toggle Auto Focus</button>
+      </div>
+    </section>
+
+    <section id="live-feed">
+      <h2>Live Feed</h2>
+      <div id="feed-container">
+        <img id="camera-feed" src="" alt="Live Camera Feed"/>
+      </div>
+    </section>
+
+    <section id="camera-list">
+      <h2>Connected Cameras</h2>
+      <ul id="camera-list-container"></ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2025 Camera Tool</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
