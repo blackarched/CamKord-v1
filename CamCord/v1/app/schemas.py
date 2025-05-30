@@ -42,7 +42,7 @@ class CameraInfo(BaseModel):
     is_running: bool
     motion_detection_enabled: Optional[bool] = None
     object_detection_enabled: Optional[bool] = None
-            
+
     class Config:
         orm_mode = True # If you might populate from an ORM object directly later
 
@@ -105,7 +105,7 @@ class CameraSettingsUpdate(CameraSettingsBase): # All fields already optional in
 class CameraSettingsResponse(CameraSettingsBase):
     id: int
     camera_id: int
-    
+
     class Config:
         orm_mode = True
 

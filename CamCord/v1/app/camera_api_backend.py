@@ -35,4 +35,3 @@ class ToggleRequest(BaseModel): enabled: bool
 @app.post("/toggle/autofocus") def toggle_autofocus(data: ToggleRequest): global autofocus autofocus = data.enabled log_event(f"Autofocus {'enabled' if autofocus else 'disabled'}") return {"autofocus": autofocus}
 
 @app.get("/logs") def get_logs(): try: with open(log_file_path, "r") as log_file: logs = log_file.readlines() return JSONResponse(content={"logs": logs}) except Exception as e: raise HTTPException(status_code=500, detail=str(e))
-

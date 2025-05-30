@@ -14,7 +14,7 @@ from .test_api_auth import create_test_admin_user # Helper from auth tests
 
 def seed_cameras(db: Session):
     # Clean up existing cameras to ensure predictable test state if session is reused somehow
-    db.query(DBCamera).delete() 
+    db.query(DBCamera).delete()
     db.commit()
 
     cam1 = DBCamera(id=1, name="Test Cam 1", rtsp_url="rtsp://test1", is_active=True)
@@ -34,7 +34,7 @@ def get_auth_headers(test_client_fixture: TestClient, db_session_fixture: Sessio
 def test_list_cameras_authenticated(test_client_fixture: TestClient, db_session_fixture: Session):
     headers = get_auth_headers(test_client_fixture, db_session_fixture)
     seeded_cameras = seed_cameras(db_session_fixture) # Seed cameras
-    
+
     # Important: CameraManager is loaded once at startup.
     # If these tests run after CameraManager has already loaded with an empty DB,
     # it won't see newly seeded cameras unless it's reloaded or cameras are added via an API.
@@ -49,11 +49,11 @@ def test_list_cameras_authenticated(test_client_fixture: TestClient, db_session_
     assert response.status_code == 200, response.text
     cameras_list = response.json()
     assert isinstance(cameras_list, list)
-    
+
     # CameraManager loads only active cameras. We seeded 2 active cameras.
     # is_running will be False as cv2.VideoCapture won't connect to dummy RTSP.
     active_seeded_cameras = [c for c in seeded_cameras if c.is_active]
-    assert len(cameras_list) == len(active_seeded_cameras) 
+    assert len(cameras_list) == len(active_seeded_cameras)
 
     for cam_info in cameras_list:
         assert cam_info["is_running"] == False # Expected in test environment
@@ -70,15 +70,15 @@ def seed_camera_with_settings(db: Session, camera_id: int, name: str, is_active:
         cam = DBCamera(id=camera_id, name=name, rtsp_url=f"rtsp://cam{camera_id}", is_active=is_active)
         db.add(cam)
         # Must commit here if settings relies on camera.id via FK immediately
-        db.commit() 
+        db.commit()
         db.refresh(cam)
 
     # Ensure settings exist for this camera
     settings = db.query(DBCameraSettings).filter(DBCameraSettings.camera_id == cam.id).first()
     if not settings:
         settings = DBCameraSettings(
-            camera_id=cam.id, 
-            resolution="1280x720", 
+            camera_id=cam.id,
+            resolution="1280x720",
             brightness=50,
             # Initialize other fields as per your model's defaults or test needs
             night_vision=False,
@@ -102,10 +102,10 @@ def test_get_camera_settings_authenticated(test_client_fixture: TestClient, db_s
     headers = get_auth_headers(test_client_fixture, db_session_fixture)
     # Seed a camera and its settings
     camera = seed_camera_with_settings(db_session_fixture, camera_id=20, name="SettingsCamGet")
-    
+
     # Reload camera manager to ensure it picks up the new camera and settings
     # This is now handled by the updated conftest.py's test_client_fixture
-    # from main import camera_manager_global 
+    # from main import camera_manager_global
     # camera_manager_global.reload_cameras_from_db()
 
     response = test_client_fixture.get(f"/api/settings/{camera.id}", headers=headers)
@@ -165,22 +165,22 @@ def test_take_snapshot_authenticated(test_client_fixture: TestClient, db_session
 
     from app.main import camera_manager_global # To mock methods on the actual instance
     camera_manager_global.reload_cameras_from_db() # Ensure CM is up-to-date
-    
+
     dummy_frame = np.zeros((100, 100, 3), dtype=np.uint8) # A fake image frame
 
     # Mock os.makedirs, cv2.imwrite, and the frame fetching part of CameraManager
     with mock.patch('os.makedirs') as mock_makedirs, \
          mock.patch('cv2.imwrite', return_value=True) as mock_cv_imwrite, \
          mock.patch.object(camera_manager_global, 'get_frame_from_camera', return_value=dummy_frame) as mock_get_frame:
-        
+
         response = test_client_fixture.post(f"/api/cameras/{camera.id}/snapshot", headers=headers)
-        
+
         assert response.status_code == 200, response.text
         json_data = response.json()
         assert json_data["message"] == "Snapshot saved"
         assert "filename" in json_data
         assert json_data["filename"].startswith(f"snapshot_cam{camera.id}_")
-        
+
         # Check that the mocks were called as expected
         mock_makedirs.assert_called_once_with(app_settings.SNAPSHOT_DIR, exist_ok=True)
         mock_get_frame.assert_called_once_with(camera.id)
@@ -197,7 +197,7 @@ def test_start_recording_authenticated(test_client_fixture: TestClient, db_sessi
 
     from app.main import camera_manager_global
     camera_manager_global.reload_cameras_from_db()
-    
+
     managed_cam = camera_manager_global.get_camera(camera.id)
     assert managed_cam is not None, "Camera not loaded into CameraManager"
 
@@ -221,7 +221,7 @@ def test_stop_recording_authenticated(test_client_fixture: TestClient, db_sessio
     # Patch the 'is_recording' attribute and the 'stop_recording' method
     with mock.patch.object(managed_cam, 'is_recording', True, create=True), \
          mock.patch.object(managed_cam, 'stop_recording', return_value=True) as mock_stop_recording_method:
-        
+
         response = test_client_fixture.post(f"/api/cameras/{camera.id}/recording/stop", headers=headers)
         assert response.status_code == 200, response.text
         assert response.json()["message"] == "Recording stopped successfully"
@@ -232,7 +232,7 @@ def test_list_events_authenticated(test_client_fixture: TestClient, db_session_f
     camera = seed_camera_with_settings(db_session_fixture, camera_id=33, name="EventLogCam")
 
     from app.main import camera_manager_global
-    camera_manager_global.reload_cameras_from_db() 
+    camera_manager_global.reload_cameras_from_db()
 
     # Seed events using CameraManager's method
     event_desc1 = "Test event 1 for listing"
@@ -244,11 +244,11 @@ def test_list_events_authenticated(test_client_fixture: TestClient, db_session_f
     assert response.status_code == 200, response.text
     events_list = response.json()
     assert isinstance(events_list, list)
-    
+
     # Check if our seeded events are present (API returns in descending timestamp order)
     descriptions_in_response = [e["message"] for e in events_list] # 'message' is the key in API for event_description
     assert event_desc1 in descriptions_in_response
     assert event_desc2 in descriptions_in_response
-    
+
     found_event1 = any(e["message"] == event_desc1 and e["camera_id"] == camera.id for e in events_list)
     assert found_event1, "Seeded event 1 not found or camera_id mismatch"

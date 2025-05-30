@@ -75,4 +75,3 @@ return ( <Tabs defaultValue="live" className="w-full p-4"> <TabsList> <TabsTrigg
 ); };
 
 export default Dashboard;
-

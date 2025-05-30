@@ -24,7 +24,7 @@ export CORS_ALLOWED_ORIGINS="http://localhost:8000,http://127.0.0.1:8000"
 
 echo ""
 echo "Using Configuration:"
-echo "SECRET_KEY: ${SECRET_KEY:0:5}... (partially hidden for security)" 
+echo "SECRET_KEY: ${SECRET_KEY:0:5}... (partially hidden for security)"
 if [ "$CAMERA_SUITE_ADMIN_PASS" = "!!!REPLACE_WITH_YOUR_ADMIN_PASSWORD!!!" ]; then
     echo "CAMERA_SUITE_ADMIN_PASS: Not set (default admin will not be created)"
 else

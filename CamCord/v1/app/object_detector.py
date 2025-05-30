@@ -55,7 +55,7 @@ class ObjectDetector:
 
             with open(classes_path, 'r') as f:
                 self.classes = [line.strip() for line in f.readlines()]
-            
+
             print(f"[ObjectDetector] Initialized successfully with {len(self.classes)} classes.")
 
         except Exception as e:
@@ -70,7 +70,7 @@ class ObjectDetector:
         height, width = frame.shape[:2]
         blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), swapRB=True, crop=False)
         self.net.setInput(blob)
-        
+
         try:
             layer_outputs = self.net.forward(self.output_layers)
         except Exception as e:
@@ -116,7 +116,7 @@ class ObjectDetector:
                 text = f"{label}: {confidence:.2f}"
                 cv2.putText(frame_with_overlays, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 detections_info.append({"label": label, "confidence": confidence, "box": [x, y, w, h]})
-        
+
         return detections_info, frame_with_overlays
 
 # Example Usage (for testing if run directly, not part of the module's API)
@@ -144,9 +144,9 @@ if __name__ == '__main__':
             # Create a dummy black image for testing
             dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(dummy_frame, "Test Image", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            
+
             detections, frame_with_overlays = detector.detect(dummy_frame)
-            
+
             print(f"Detections: {detections}")
             # To display the image if in a GUI environment (won't work in non-GUI sandbox)
             # cv2.imshow("Detections", frame_with_overlays)

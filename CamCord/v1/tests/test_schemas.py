@@ -3,10 +3,10 @@ import pytest
 from pydantic import ValidationError
 
 # Assuming conftest.py correctly adds 'app' to sys.path OR pytest.ini handles pythonpath
-from schemas import CameraSettingsUpdate, CameraSettingsResponse, CameraInfo 
+from schemas import CameraSettingsUpdate, CameraSettingsResponse, CameraInfo
 
 def test_camera_settings_update_defaults():
-    settings = CameraSettingsUpdate() 
+    settings = CameraSettingsUpdate()
     assert settings.motion_detection_enabled == False
     assert settings.brightness == 50
     assert settings.object_detection_enabled == False
@@ -29,18 +29,18 @@ def test_camera_settings_update_custom_valid():
 
 def test_camera_settings_update_invalid_value():
     with pytest.raises(ValidationError):
-        CameraSettingsUpdate(brightness=151) 
+        CameraSettingsUpdate(brightness=151)
 
     with pytest.raises(ValidationError):
-        CameraSettingsUpdate(motion_sensitivity=-1) 
-        
+        CameraSettingsUpdate(motion_sensitivity=-1)
+
 def test_camera_info_instantiation():
     # Basic test to ensure CameraInfo can be instantiated
     info = CameraInfo(
-        id=1, 
-        name="Test Cam", 
-        is_running=True, 
-        motion_detection_enabled=False, 
+        id=1,
+        name="Test Cam",
+        is_running=True,
+        motion_detection_enabled=False,
         object_detection_enabled=True
     )
     assert info.name == "Test Cam"

@@ -69,4 +69,3 @@ camera_handler = CameraHandler()
 @app.get("/snapshot") def snapshot(): frame = camera_handler.get_frame() if frame is not None: timestamp = time.strftime("%Y-%m-%d_%H-%M-%S") filename = f"snapshot_{timestamp}.jpg" path = os.path.join("snapshots", filename) os.makedirs("snapshots", exist_ok=True) cv2.imwrite(path, frame) return {"saved_to": path} return {"error": "No frame available"}
 
 if name == "main": uvicorn.run("camera_server:app", host="0.0.0.0", port=8000, reload=False)
-

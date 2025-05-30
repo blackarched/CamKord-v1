@@ -14,53 +14,53 @@ document.addEventListener("DOMContentLoaded", () => {
     const loginMessage = document.getElementById("login-message");
     const appMessageArea = document.getElementById("app-message-area");
     const appMessageText = document.getElementById("app-message-text");
-    
+
     let authToken = localStorage.getItem('authToken');
     const AUTH_API_BASE = "http://localhost:8000/auth"; // For /token
     const API_BASE = "http://localhost:8000/api"; // For other API calls
 
     let selectedCameraId = null;
     let camerasCache = []; // To store the last loaded camera list/details
-    let videoSocket = null; 
+    let videoSocket = null;
     let currentCameraSettings = null;
 
     function showLoginForm() {
         if (loginSection) loginSection.style.display = "block";
         if (mainAppContent) mainAppContent.style.display = "none";
         if (logoutButton) logoutButton.style.display = "none";
-        if (loginMessage) loginMessage.textContent = ""; 
+        if (loginMessage) loginMessage.textContent = "";
         if (appMessageArea) appMessageArea.style.display = 'none'; // Clear app message too
     }
 
-    let appMessageTimeout = null; 
+    let appMessageTimeout = null;
     function showAppMessage(message, type = 'info', duration = 3000) {
         if (!appMessageArea || !appMessageText) return;
 
-        clearTimeout(appMessageTimeout); 
+        clearTimeout(appMessageTimeout);
 
         appMessageText.textContent = message;
         appMessageArea.style.display = 'block';
 
         switch (type) {
             case 'error':
-                appMessageArea.style.color = '#721c24'; 
-                appMessageArea.style.backgroundColor = '#f8d7da'; 
-                appMessageArea.style.borderColor = '#f5c6cb'; 
+                appMessageArea.style.color = '#721c24';
+                appMessageArea.style.backgroundColor = '#f8d7da';
+                appMessageArea.style.borderColor = '#f5c6cb';
                 break;
             case 'success':
-                appMessageArea.style.color = '#155724'; 
-                appMessageArea.style.backgroundColor = '#d4edda'; 
-                appMessageArea.style.borderColor = '#c3e6cb'; 
+                appMessageArea.style.color = '#155724';
+                appMessageArea.style.backgroundColor = '#d4edda';
+                appMessageArea.style.borderColor = '#c3e6cb';
                 break;
-            case 'warning': 
-                appMessageArea.style.color = '#856404'; 
-                appMessageArea.style.backgroundColor = '#fff3cd'; 
-                appMessageArea.style.borderColor = '#ffeeba'; 
+            case 'warning':
+                appMessageArea.style.color = '#856404';
+                appMessageArea.style.backgroundColor = '#fff3cd';
+                appMessageArea.style.borderColor = '#ffeeba';
                 break;
             default: // 'info'
-                appMessageArea.style.color = '#0c5460'; 
-                appMessageArea.style.backgroundColor = '#d1ecf1'; 
-                appMessageArea.style.borderColor = '#bee5eb'; 
+                appMessageArea.style.color = '#0c5460';
+                appMessageArea.style.backgroundColor = '#d1ecf1';
+                appMessageArea.style.borderColor = '#bee5eb';
                 break;
         }
 
@@ -82,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (authToken) {
             showAppContent();
             // Attempt to load data if logged in
-            loadCameras(); 
+            loadCameras();
             // loadFeed() is called via selectCamera -> loadCameras
         } else {
             showLoginForm();
@@ -111,7 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 authToken = data.access_token;
                 localStorage.setItem('authToken', authToken);
                 loginMessage.textContent = ""; // Clear specific login form message
-                updateUIForAuthState(); 
+                updateUIForAuthState();
                 showAppMessage("Login successful!", "success", 2000);
             } else {
                 const errorData = await response.json().catch(() => ({ detail: "Login failed. Invalid credentials or server error." }));
@@ -139,12 +139,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         authToken = null;
         localStorage.removeItem('authToken');
-        if (feedImage) feedImage.src = ""; 
+        if (feedImage) feedImage.src = "";
         if (cameraListContainer) cameraListContainer.innerHTML = "";
-        currentCameraSettings = null; 
-        updateControlsUI(); 
+        currentCameraSettings = null;
+        updateControlsUI();
         if (appMessageArea) appMessageArea.style.display = 'none'; // Clear app message on logout
-        updateUIForAuthState(); 
+        updateUIForAuthState();
     }
     if (logoutButton) logoutButton.addEventListener('click', handleLogout);
 
@@ -166,14 +166,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function fetchCameraSettings(cameraId) {
-        if (!mainAppContent || mainAppContent.style.display === 'none') return; 
+        if (!mainAppContent || mainAppContent.style.display === 'none') return;
 
         if (!cameraId && cameraId !== 0) { // Allow cameraId 0 if valid
             currentCameraSettings = null;
             updateControlsUI();
             return;
         }
-        if (!authToken) { 
+        if (!authToken) {
             currentCameraSettings = null;
             updateControlsUI();
             return;
@@ -188,26 +188,26 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 console.error(`Failed to load settings for camera ${cameraId}: ${response.status}`);
                 showAppMessage(`Failed to load settings for camera ${cameraId}. Status: ${response.status}`, 'error', 5000);
-                currentCameraSettings = null; 
+                currentCameraSettings = null;
             }
-        } catch (err) { 
+        } catch (err) {
             console.error(`Error fetching settings for camera ${cameraId}:`, err);
             // Only show message if not an 'Unauthorized' error, as handleLogout would have been called
             if (err.message !== 'Unauthorized') {
                 showAppMessage(`Error fetching settings for camera ${cameraId}. Check console.`, 'error', 5000);
             }
-            currentCameraSettings = null; 
+            currentCameraSettings = null;
         }
         updateControlsUI();
     }
 
     function selectCamera(camera) {
         const cameraListItems = document.querySelectorAll("#camera-list-container li");
-        
+
         if (!camera || camera.id === undefined) {
             console.log("No camera selected or invalid camera object.");
             selectedCameraId = null;
-            if (feedImage) feedImage.src = ""; 
+            if (feedImage) feedImage.src = "";
             cameraListItems.forEach(item => item.classList.remove("selected-camera"));
             fetchCameraSettings(null); // Clear settings and update controls UI
             return;
@@ -228,8 +228,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (selectedCameraId !== null) {
             loadFeed(selectedCameraId);
             fetchCameraSettings(selectedCameraId);
-        } else { 
-            loadFeed(null); 
+        } else {
+            loadFeed(null);
             fetchCameraSettings(null);
         }
     }
@@ -242,7 +242,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!authToken) return;
 
         console.log(`Updating ${settingName} to ${newValue} for camera ${selectedCameraId}`);
-        const payload = { [settingName]: newValue }; 
+        const payload = { [settingName]: newValue };
 
         try {
             const response = await fetchWithAuth(`${API_BASE}/settings/${selectedCameraId}`, {
@@ -251,23 +251,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify(payload)
             });
             if (response.ok) {
-                currentCameraSettings = await response.json(); 
+                currentCameraSettings = await response.json();
                 console.log(`Setting '${settingName}' updated. New settings:`, currentCameraSettings);
                 showAppMessage(`Camera setting '${settingName}' updated successfully!`, 'success');
             } else {
                 const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
                 console.error(`Failed to update setting '${settingName}': ${response.status}`, errorData);
                 showAppMessage(`Failed to update '${settingName}': ${errorData.detail || response.statusText}`, 'error', 5000);
-                await fetchCameraSettings(selectedCameraId); 
+                await fetchCameraSettings(selectedCameraId);
             }
-        } catch (err) { 
+        } catch (err) {
             console.error(`Error updating setting '${settingName}':`, err);
             if (err.message !== 'Unauthorized') { // Unauthorized already handled by fetchWithAuth->handleLogout
                 showAppMessage("Error updating setting. Please check console.", 'error', 5000);
                 await fetchCameraSettings(selectedCameraId);
             }
         }
-        updateControlsUI(); 
+        updateControlsUI();
     }
 
     async function fetchWithAuth(url, options = {}) {
@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (cameraId === null || cameraId === undefined) { // Allow cameraId 0 if valid
         console.log("loadFeed called without valid cameraId for WebSocket, clearing feed.");
-        feedImage.src = ""; 
+        feedImage.src = "";
         feedImage.alt = "No camera selected.";
         return;
     }
@@ -331,8 +331,8 @@ document.addEventListener("DOMContentLoaded", () => {
         videoSocket = null;
         return;
     }
-    
-    videoSocket.binaryType = "arraybuffer"; 
+
+    videoSocket.binaryType = "arraybuffer";
 
     videoSocket.onopen = () => {
         console.log(`WebSocket connection opened for camera ${cameraId}: ${wsUrl}`);
@@ -422,7 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     li.addEventListener('click', () => selectCamera(cam)); // Add click listener
                     cameraListContainer.appendChild(li);
                 });
-                
+
                 camerasCache = cameras; // Update cache
 
                 if (cameras.length > 0) {
@@ -441,18 +441,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     selectCamera(cameraToSelect); // Select the determined camera
                 } else {
                     // No cameras available
-                    selectCamera(null); 
+                    selectCamera(null);
                     if (cameraListContainer) cameraListContainer.innerHTML = "<li>No cameras available.</li>";
-                    showAppMessage("No cameras available to display.", "info", 0); 
+                    showAppMessage("No cameras available to display.", "info", 0);
                 }
             }
         } else {
             console.error("Failed to load cameras:", response.status, await response.text());
             showAppMessage(`Failed to load camera list. Status: ${response.status}`, 'error');
-            camerasCache = []; 
-            selectCamera(null); 
+            camerasCache = [];
+            selectCamera(null);
         }
-    } catch (err) { 
+    } catch (err) {
         console.error("Error in loadCameras:", err);
         if (err.message !== 'Unauthorized') {
             showAppMessage("Error loading camera list. Check console.", "error");

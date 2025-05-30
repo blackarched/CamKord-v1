@@ -20,7 +20,7 @@ def list_cameras(self) -> List[Dict[str, Optional[int]]]:
     elif system == 'Windows':
         return self._list_windows()
     else:
-        msg = f"Unsupported platform: {system}"  
+        msg = f"Unsupported platform: {system}"
         self.logger.error(msg)
         raise CameraError(msg)
 
@@ -90,7 +90,7 @@ def open_camera(self, index: int, width: int = 640, height: int = 480) -> cv2.Vi
     backend = cv2.CAP_DSHOW if platform.system() == 'Windows' else cv2.CAP_V4L2
     cap = cv2.VideoCapture(index, backend)
     if cap is None or not cap.isOpened():
-        msg = f"Unable to open camera at index {index}"  
+        msg = f"Unable to open camera at index {index}"
         self.logger.error(msg)
         raise CameraError(msg)
 
@@ -136,4 +136,3 @@ def get_supported_resolutions(self, index: int) -> List[Dict[str, int]]:
 Example usage (for integration; remove or adjust logging in production)
 
 if name == 'main': manager = USBCameraManager() cams = manager.list_cameras() for cam in cams: print(f"Index: {cam['index']}, Name: {cam['name']}") if cams: cap = manager.open_camera(cams[0]['index'], 1280, 720) ret, frame = cap.read() if ret: cv2.imwrite('test_capture.jpg', frame) cap.release()
-

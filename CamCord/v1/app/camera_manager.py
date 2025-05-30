@@ -16,7 +16,7 @@ class ManagedCamera:
         self.camera_id = db_camera.id
         self.name = db_camera.name
         self.manager = manager # Store manager reference
-        self.rtsp_url = db_camera.rtsp_url 
+        self.rtsp_url = db_camera.rtsp_url
         # TODO: Later, extend to support USB cameras using an index if rtsp_url is None
 
         self.video_capture = None
@@ -35,12 +35,20 @@ class ManagedCamera:
         self.motion_last_processed_gray_frame: Optional[np.ndarray] = None
         self.motion_debounce_seconds: float = 5.0
         self.last_motion_event_time: float = 0.0
-        # self.manager_ref removed as self.manager is now used
+
+        # Reconnection and monitoring attributes
+        self.reconnect_attempts: int = 0
+        self.max_reconnect_attempts: int = 5
+        self.reconnect_delay_base: float = 2.0
+        self.max_reconnect_delay: float = 60.0
+        self.current_reconnect_delay: float = self.reconnect_delay_base
+        self.last_successful_frame_time: Optional[float] = None
+        self.consecutive_frame_read_failures: int = 0
+        self.max_consecutive_frame_read_failures: int = 150
 
         self._load_settings(db_session)
-        self._connect()
-        if self.is_running: # Call only if connection was successful
-            self._apply_initial_capture_properties()
+        self._connect() # Initial connection attempt
+        # No need to call _apply_initial_capture_properties here, _connect will do it on success
 
     def _handle_motion_event(self):
         current_time = time.time()
@@ -50,7 +58,7 @@ class ManagedCamera:
 
         self.last_motion_event_time = current_time
         # print(f"[ManagedCamera {self.camera_id}] Motion Event Triggered at {time.ctime(current_time)}") # Replaced by DB log
-        
+
         self.manager.record_camera_event(
             camera_id=self.camera_id,
             event_type="motion_detected",
@@ -74,7 +82,7 @@ class ManagedCamera:
         if self.motion_last_processed_gray_frame is None:
             self.motion_last_processed_gray_frame = gray
             return False
-        
+
         # Sensitivity mapping for diff_thresh_val
         # Lower threshold means more sensitive. Map sensitivity 100 (most sensitive) to 5, 0 (least sensitive) to 50.
         diff_thresh_val = max(5, 50 - int(self.settings.motion_sensitivity * 0.45))
@@ -84,7 +92,7 @@ class ManagedCamera:
         thresh = cv2.dilate(thresh, None, iterations=2)
 
         cnts, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
+
         motion_found = False
         min_area = self.settings.motion_min_area if self.settings.motion_min_area else 500 # Default if not set
         for c in cnts:
@@ -107,7 +115,7 @@ class ManagedCamera:
         filename = f"rec_cam{self.camera_id}_{int(time.time())}.mp4"
         filepath = os.path.join(self.recording_dir, filename)
 
-        current_frame_raw = self.get_frame() 
+        current_frame_raw = self.get_frame()
         if current_frame_raw is None:
             print(f"[ManagedCamera {self.camera_id}] Cannot get frame to determine recording dimensions.")
             return False
@@ -117,14 +125,14 @@ class ManagedCamera:
              return False
 
         height, width, _ = current_frame_processed.shape
-        
-        actual_recording_fps = (self.settings.frame_rate 
-                               if hasattr(self.settings, 'frame_rate') and self.settings.frame_rate 
+
+        actual_recording_fps = (self.settings.frame_rate
+                               if hasattr(self.settings, 'frame_rate') and self.settings.frame_rate
                                else self.recording_fps)
 
         try:
             self.video_writer = cv2.VideoWriter(
-                filepath, 
+                filepath,
                 cv2.VideoWriter_fourcc(*'mp4v'),
                 float(actual_recording_fps),
                 (width, height)
@@ -146,23 +154,23 @@ class ManagedCamera:
 
     def _record_loop(self):
         print(f"[ManagedCamera {self.camera_id}] Recording loop started.")
-        actual_recording_fps = (self.settings.frame_rate 
-                               if hasattr(self.settings, 'frame_rate') and self.settings.frame_rate 
+        actual_recording_fps = (self.settings.frame_rate
+                               if hasattr(self.settings, 'frame_rate') and self.settings.frame_rate
                                else self.recording_fps)
         sleep_interval = 1.0 / actual_recording_fps
 
         while self.is_recording:
             if not self.video_writer or not self.video_writer.isOpened():
                 print(f"[ManagedCamera {self.camera_id}] VideoWriter became unavailable. Stopping recording loop.")
-                self.is_recording = False 
+                self.is_recording = False
                 break
-            
-            frame_raw = self.get_frame() 
+
+            frame_raw = self.get_frame()
             if frame_raw is not None:
                 frame_to_record = self.apply_settings_to_frame(frame_raw)
                 if frame_to_record is not None:
                     self.video_writer.write(frame_to_record)
-            
+
             time.sleep(sleep_interval)
 
         if self.video_writer:
@@ -175,30 +183,30 @@ class ManagedCamera:
         if not self.is_recording:
             print(f"[ManagedCamera {self.camera_id}] Not recording.")
             return False
-        
+
         print(f"[ManagedCamera {self.camera_id}] Attempting to stop recording...")
-        self.is_recording = False 
-        
+        self.is_recording = False
+
         if self.recording_thread and self.recording_thread.is_alive():
-            self.recording_thread.join(timeout=5.0) 
+            self.recording_thread.join(timeout=5.0)
             if self.recording_thread.is_alive():
                 print(f"[ManagedCamera {self.camera_id}] Warning: Recording thread did not terminate in time.")
-        
+
         if self.video_writer and self.video_writer.isOpened():
             print(f"[ManagedCamera {self.camera_id}] Forcibly releasing VideoWriter post-join.")
             self.video_writer.release()
         self.video_writer = None
-        self.recording_thread = None 
+        self.recording_thread = None
         print(f"[ManagedCamera {self.camera_id}] Recording stopped.")
         return True
 
     def reload_settings_and_apply(self, db_session: Session):
         print(f"[ManagedCamera {self.camera_id}] Reloading settings from DB.")
         # Ensure _load_settings can take a session and updates self.settings
-        self._load_settings(db_session) 
+        self._load_settings(db_session)
         if self.video_capture and self.video_capture.isOpened():
             # Ensure _apply_initial_capture_properties exists and applies settings
-            self._apply_initial_capture_properties() 
+            self._apply_initial_capture_properties()
             print(f"[ManagedCamera {self.camera_id}] Re-applied initial capture properties.")
         elif self.is_running: # Check if it was supposed to be running
             print(f"[ManagedCamera {self.camera_id}] Camera was running but video_capture is not open. Attempting to reconnect.")
@@ -234,7 +242,7 @@ class ManagedCamera:
                 cap_brightness = self.settings.brightness / 100.0
                 print(f"[ManagedCamera {self.camera_id}] Attempting to set CAP_PROP_BRIGHTNESS to {cap_brightness}")
                 self.video_capture.set(cv2.CAP_PROP_BRIGHTNESS, cap_brightness)
-            
+
             # Contrast (Attempt, camera-dependent, range 0-1 for some backends)
             if hasattr(self.settings, 'contrast') and self.settings.contrast is not None:
                 cap_contrast = self.settings.contrast / 100.0
@@ -259,53 +267,123 @@ class ManagedCamera:
             # self.settings = DBCameraSettings(camera_id=self.camera_id) # Fill with defaults
 
     def _connect(self):
-        if self.rtsp_url:
-            try:
-                self.video_capture = cv2.VideoCapture(self.rtsp_url)
-                if self.video_capture.isOpened():
-                    self.is_running = True
-                    print(f"[ManagedCamera {self.camera_id}] Connected to {self.rtsp_url}")
-                else:
-                    print(f"[ManagedCamera {self.camera_id}] Failed to open {self.rtsp_url}")
-                    self.is_running = False
-            except Exception as e:
-                print(f"[ManagedCamera {self.camera_id}] Error connecting to {self.rtsp_url}: {e}")
-                self.is_running = False
-        # TODO: Handle USB camera connection (e.g., if self.camera_id is an int index)
-        else:
-            # Changed print statement as per instructions
+        if not self.rtsp_url:
             print(f"[ManagedCamera {self.camera_id}] Configuration error: RTSP URL is not set. Camera will not connect.")
             self.is_running = False
+            return False # Indicate connection failure
+
+        print(f"[ManagedCamera {self.camera_id}] Attempting to connect to {self.rtsp_url}...")
+        self.reconnect_attempts = 0 # Reset attempts for this connection cycle
+        self.current_reconnect_delay = self.reconnect_delay_base
+
+        while self.reconnect_attempts < self.max_reconnect_attempts:
+            if self.video_capture: # Release existing if any (e.g. from a previous failed partial connect)
+                with self.lock:
+                    self.video_capture.release()
+                self.video_capture = None
+
+            try:
+                with self.lock: # Protect VideoCapture creation
+                    self.video_capture = cv2.VideoCapture(self.rtsp_url) # Add CAP_FFMPEG or other flags if needed
+
+                if self.video_capture and self.video_capture.isOpened():
+                    self.is_running = True
+                    self.reconnect_attempts = 0 # Reset on success
+                    self.consecutive_frame_read_failures = 0
+                    self.last_successful_frame_time = time.time()
+                    print(f"[ManagedCamera {self.camera_id}] Successfully connected to {self.rtsp_url}.")
+                    # After successful (re)connection, apply properties
+                    self._apply_initial_capture_properties()
+                    return True # Indicate success
+                else:
+                    self.is_running = False # Ensure it's false if open fails
+                    print(f"[ManagedCamera {self.camera_id}] Failed to open stream (attempt {self.reconnect_attempts + 1}/{self.max_reconnect_attempts}).")
+
+            except Exception as e:
+                self.is_running = False
+                print(f"[ManagedCamera {self.camera_id}] Error connecting (attempt {self.reconnect_attempts + 1}/{self.max_reconnect_attempts}): {e}")
+
+            self.reconnect_attempts += 1
+            if self.reconnect_attempts < self.max_reconnect_attempts:
+                print(f"[ManagedCamera {self.camera_id}] Retrying in {self.current_reconnect_delay:.1f} seconds...")
+                time.sleep(self.current_reconnect_delay)
+                # Exponential backoff for delay
+                self.current_reconnect_delay = min(self.max_reconnect_delay, self.current_reconnect_delay * 2)
+            else:
+                print(f"[ManagedCamera {self.camera_id}] Max reconnect attempts reached for {self.rtsp_url}. Giving up for now.")
+                break # Exit loop
+
+        self.is_running = False # Explicitly set to false if loop finishes without success
+        return False # Indicate connection failure
 
 
-    def get_frame(self):
-        if not self.is_running or self.video_capture is None:
+    def get_frame(self): # This is the raw frame getter
+        if not self.is_running: # If not supposed to be running (e.g. after max retries in _connect)
+            # Check if enough time has passed to try connecting again (e.g., after a longer pause)
+            # This could be a periodic check by CameraManager too.
+            # For now, if not is_running, it implies _connect failed definitively.
             return None
-        with self.lock:
-            ret, frame = self.video_capture.read()
+
+        if not self.video_capture or not self.video_capture.isOpened():
+            print(f"[ManagedCamera {self.camera_id}] VideoCapture not open. Attempting to reconnect.")
+            if self._connect(): # Try to reconnect
+                # If _connect succeeds, it sets is_running and applies initial props.
+                # Then try to get a frame again (but avoid recursion if _connect calls get_frame)
+                # For now, let _connect handle the state, and next call to get_frame will try.
+                print(f"[ManagedCamera {self.camera_id}] Reconnected. Frame will be fetched on next call.")
+            else:
+                print(f"[ManagedCamera {self.camera_id}] Reconnect failed in get_frame.")
+                self.is_running = False # Ensure it's marked as down
+            return None
+
+        ret, frame = False, None
+        try:
+            with self.lock: # Protect read operation
+                if self.video_capture and self.video_capture.isOpened(): # Double check inside lock
+                     ret, frame = self.video_capture.read()
+        except Exception as e:
+            print(f"[ManagedCamera {self.camera_id}] Exception during video_capture.read(): {e}")
+            ret = False # Treat as a read failure
+
         if not ret:
-            # TODO: Handle reconnection logic if needed (This TODO can remain for future work)
+            self.consecutive_frame_read_failures += 1
+            if self.consecutive_frame_read_failures >= self.max_consecutive_frame_read_failures:
+                print(f"[ManagedCamera {self.camera_id}] Max consecutive frame read failures ({self.consecutive_frame_read_failures}). Stream lost. Releasing and attempting reconnect cycle.")
+                self.is_running = False # Mark as not running before attempting _connect
+                with self.lock: # Ensure capture is released before _connect tries to make a new one
+                    if self.video_capture:
+                        self.video_capture.release()
+                    self.video_capture = None
+                self._connect() # This will try to reconnect and set is_running if successful
+            else:
+                # Log less verbosely for intermittent failures
+                if self.consecutive_frame_read_failures % 30 == 0: # Log every ~1 second if 30fps
+                    print(f"[ManagedCamera {self.camera_id}] Frame read failed (consecutive: {self.consecutive_frame_read_failures}).")
             return None
-        
-        # Removed stale TODO comment, as settings are applied in apply_settings_to_frame,
-        # and get_frame_from_camera in CameraManager calls apply_settings_to_frame.
-        # The raw frame is returned here.
 
+        self.consecutive_frame_read_failures = 0
+        self.last_successful_frame_time = time.time()
         return frame
 
     def release(self):
+        print(f"[ManagedCamera {self.camera_id}] Releasing camera resources...")
+        self.is_running = False # Signal any loops to stop
         if self.is_recording:
-            self.stop_recording()
-        self.is_running = False
+            self.stop_recording() # Ensure recording stops and thread joins
+
         with self.lock:
             if self.video_capture:
                 self.video_capture.release()
-                print(f"[ManagedCamera {self.camera_id}] Released.")
-    
+                self.video_capture = None
+
+        self.reconnect_attempts = 0 # Reset for next potential connect
+        self.consecutive_frame_read_failures = 0
+        print(f"[ManagedCamera {self.camera_id}] Released.")
+
     def apply_settings_to_frame(self, frame):
         if not self.settings or frame is None:
             return frame
-        
+
         processed_frame = frame.copy()
 
         # Night Vision (Example from before, ensure it's robust)
@@ -347,7 +425,7 @@ class ManagedCamera:
                 # A simple sharpening kernel. More complex kernels could be used.
                 kernel = np.array([[-1, -1, -1],
                                    [-1,  9, -1],
-                                   [-1, -1, -1]]) 
+                                   [-1, -1, -1]])
                 # Adjust center based on sharpness intensity (simple example)
                 # intensity_factor = (self.settings.sharpness - 50) / 50.0 # 0 to 1 for 50-100
                 # kernel[1,1] = 9 + intensity_factor * 4 # e.g. center from 9 to 13
@@ -363,9 +441,9 @@ class ManagedCamera:
             try:
                 # Make a copy to ensure original is not modified if not needed elsewhere,
                 # or if detect method modifies frame in place and it's undesirable.
-                frame_to_detect_on = processed_frame.copy() 
+                frame_to_detect_on = processed_frame.copy()
                 detections, frame_with_overlays = self.manager.object_detector.detect(frame_to_detect_on)
-                
+
                 # If detections occurred, you might want to log them or handle them.
                 # For now, we just use the frame with overlays.
                 # if detections:
@@ -375,7 +453,7 @@ class ManagedCamera:
             except Exception as e:
                 print(f"[ManagedCamera {self.camera_id}] Error during object detection: {e}")
                 # Fall through to return the original processed_frame without detection overlays
-        
+
         return processed_frame
 
 class CameraManager:
@@ -392,7 +470,7 @@ class CameraManager:
             managed_cam_to_release = self.cameras.pop(cam_id_to_release)
             managed_cam_to_release.release()
         # self.cameras dictionary is now empty.
-        
+
         # Ensure db_session is valid and active
         if not self.db_session or self.db_session.is_active == False:
             # This case should ideally not happen if db_session is managed well.
@@ -404,7 +482,7 @@ class CameraManager:
         active_cameras_from_db = self.db_session.query(DBCamera).filter(DBCamera.is_active == True).all()
         for db_cam_from_db in active_cameras_from_db:
             self.cameras[db_cam_from_db.id] = ManagedCamera(
-                db_camera=db_cam_from_db, 
+                db_camera=db_cam_from_db,
                 db_session=self.db_session, # Pass the manager's session for ManagedCamera's initial settings load
                 manager=self
             )
@@ -423,7 +501,7 @@ class CameraManager:
                 camera_id=camera_id,
                 event_type=event_type,
                 event_description=description,
-                timestamp=datetime.utcnow() 
+                timestamp=datetime.utcnow()
             )
             self.db_session.add(new_event)
             self.db_session.commit()
@@ -444,7 +522,7 @@ class CameraManager:
             managed_cam = self.cameras.pop(cam_id)
             managed_cam.release()
         print("[CameraManager] All cameras released.")
-    
+
     def get_frame_from_camera(self, camera_id: int):
         managed_cam = self.get_camera(camera_id)
         if managed_cam and managed_cam.is_running:
@@ -452,14 +530,14 @@ class CameraManager:
             if raw_frame is not None:
                 # Apply visual settings first
                 processed_frame = managed_cam.apply_settings_to_frame(raw_frame)
-                
+
                 # Then, if motion detection is enabled, detect motion on the processed frame
                 if processed_frame is not None and managed_cam.settings and \
                    managed_cam.settings.motion_detection_enabled:
                     # Pass a copy for motion detection if _detect_motion might modify it (it doesn't currently)
-                    if managed_cam._detect_motion(processed_frame.copy()): 
+                    if managed_cam._detect_motion(processed_frame.copy()):
                         managed_cam._handle_motion_event() # Has debounce logic
-                
+
                 return processed_frame # Return the visually processed frame
         return None
 
@@ -468,6 +546,6 @@ class CameraManager:
         if managed_cam:
             print(f"[CameraManager] Notifying camera {camera_id} of settings update.")
             # Pass the db_session_for_reload for the ManagedCamera to use for its own query
-            managed_cam.reload_settings_and_apply(db_session_for_reload) 
+            managed_cam.reload_settings_and_apply(db_session_for_reload)
         else:
             print(f"[CameraManager] Cannot notify settings update, camera {camera_id} not found or not active.")

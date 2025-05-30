@@ -60,14 +60,14 @@ CamKord-v1/
 1.  **Clone the Repository:**
     ```bash
     git clone <repository_url> # Or download and extract the ZIP
-    cd CamKord-v1 
+    cd CamKord-v1
     ```
 
 2.  **Install Python Dependencies:**
     It's highly recommended to use a Python virtual environment.
     ```bash
     # Create a virtual environment (e.g., named 'venv')
-    python3 -m venv venv 
+    python3 -m venv venv
     # Activate it
     # On Linux/macOS:
     source venv/bin/activate
@@ -136,4 +136,109 @@ The application behavior can be customized via environment variables set in the 
 *   `SNAPSHOT_DIR`: Directory to save snapshots. (Defaults to `snapshots` relative to `app`).
 *   `LOG_DIR`: Directory for general logs. (Defaults to `logs` relative to `app`).
 *   Refer to `config.py` for other less critical configuration options like default camera resolution, supported resolutions, etc.
+
+## Security Considerations
+
+Ensuring the security of your CamKord deployment is critical, especially as it handles video feeds and potentially sensitive data. Please consider the following:
+
+### HTTPS/SSL/TLS
+For any production deployment, it is **strongly recommended** to run CamKord behind a reverse proxy (e.g., Nginx, Traefik, Caddy) that handles SSL/TLS termination. This ensures that all communication between clients (browsers, mobile apps) and the CamKord server is encrypted via HTTPS.
+*   Uvicorn, when run directly as in the startup scripts, serves HTTP. This is suitable for local development or within a trusted network where the reverse proxy handles external HTTPS.
+*   Obtain SSL certificates for your domain, for example, using Let's Encrypt (often integrated with reverse proxies).
+
+### Important Security Headers
+Configure your reverse proxy to add essential HTTP security headers to client responses. These headers help protect against common web vulnerabilities:
+*   `Strict-Transport-Security (HSTS)`: Instructs browsers to only communicate with the server over HTTPS. Example: `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+*   `X-Content-Type-Options: nosniff`: Prevents browsers from MIME-sniffing the content-type, reducing risk of XSS.
+*   `X-Frame-Options: DENY` or `SAMEORIGIN`: Protects against clickjacking attacks by controlling how your site can be embedded in iframes.
+*   `Content-Security-Policy (CSP)`: A powerful header to control resources the browser is allowed to load, mitigating XSS and data injection attacks. CSP can be complex to configure correctly but offers significant protection. Example (very restrictive): `Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';` (Needs careful tuning for your specific frontend needs, especially if using CDNs or inline scripts/styles extensively).
+
+### Environment Variables & Secrets
+*   **`SECRET_KEY`**: This is used for signing JWTs and other security functions. It **must** be a long, random, and unique string, kept confidential, and set in your startup script (or system environment). Do not commit your actual secret key to version control.
+*   **`CAMERA_SUITE_ADMIN_PASS`**: Set a strong, unique password for the initial 'admin' user via this environment variable in your startup script.
+*   **`DATA_ENCRYPTION_KEY`**: (If snapshot/recording encryption is fully implemented) This key, if used for encrypting data at rest, must also be kept highly confidential and secure.
+
+### API Rate Limiting
+The application includes rate limiting on critical API endpoints (like login) to help protect against brute-force attacks and denial-of-service attempts. Default limits are set, but review them if you have specific needs.
+
+### Database Security
+*   The default SQLite database (`app/data/camera_suite.db`) stores application data, including user credentials (hashed passwords) and event logs. Ensure this file and its directory are protected with appropriate file system permissions to restrict access.
+*   For more robust security, scalability, and management features in a larger production environment, consider migrating to a dedicated database server like PostgreSQL.
+
+### Storage for Snapshots and Recordings
+*   Snapshots are encrypted at rest if the `DATA_ENCRYPTION_KEY` is configured and encryption logic is active. (Verify current status of this feature).
+*   Video recordings are currently saved as standard MP4 files and are **not** encrypted at rest by the application itself.
+*   Protect the storage directories for snapshots (`app/snapshots/`) and recordings (`app/recordings/`) with strong file system permissions.
+*   Consider full-disk encryption on the server for an additional layer of protection for all data at rest.
+
+### Regular Software Updates
+Keep all dependencies listed in `requirements.txt` (especially FastAPI, Uvicorn, cryptography libraries) and the underlying system software (OS, Python) up to date to ensure you have the latest security patches.
+
+### Network Security
+*   Run CamKord within a trusted network environment.
+*   If exposing to the internet (even via reverse proxy), ensure your firewall is properly configured to only allow necessary ports (e.g., 443 for HTTPS).
+
+### Physical Security
+*   Ensure the server running CamKord and the cameras themselves are physically secure to prevent unauthorized access or tampering.
+
+## Docker Deployment (Recommended)
+
+This application can be easily deployed using Docker. A `Dockerfile` is provided.
+
+**1. Prerequisites:**
+*   Docker installed and running.
+
+**2. Prepare Files (Important):**
+    *   **Environment Variables:** While the Dockerfile sets some defaults, critical secrets like `SECRET_KEY`, `DATA_ENCRYPTION_KEY`, and `CAMERA_SUITE_ADMIN_PASS` **must not be hardcoded in the Dockerfile with production values**. Pass them during `docker run` using the `-e` flag or via `docker-compose.yml`.
+    *   **Font Files:** Place required font files (`BlenderProBook.woff2`, `Oxanium.woff2`, `Cyberpunk.otf`) into the `CamCord/v1/frontend/fonts/` directory on your host machine if you intend to build them into the image. Alternatively, mount this as a volume.
+    *   **Object Detection Models:** Place model files (`yolov4-tiny.cfg`, `yolov4-tiny.weights`, `coco.names`) into `CamCord/v1/app/models/` on your host if building into the image. Alternatively, mount as a volume.
+
+**3. Build the Docker Image:**
+Navigate to the `CamKord/v1/` directory (where the `Dockerfile` is located) and run:
+```bash
+docker build -t camkord-app .
+```
+
+**4. Run the Docker Container:**
+Here's an example `docker run` command. Adjust paths and environment variables as needed.
+
+```bash
+docker run -d --name camkord-instance \
+    -p 8000:8000 \
+    -e SECRET_KEY="YOUR_VERY_STRONG_SECRET_KEY_HERE" \
+    -e DATA_ENCRYPTION_KEY="YOUR_GENERATED_FERNET_KEY_HERE" \
+    -e CAMERA_SUITE_ADMIN_PASS="YourSecureAdminP@ssw0rd" \
+    -e CORS_ALLOWED_ORIGINS="http://your.frontend.domain:port,https://your.other.domain" \
+    -e DATABASE_URL="sqlite:///data/camera_suite.db" \
+    -v $(pwd)/app/data:/opt/camkord/app/data \
+    -v $(pwd)/app/models:/opt/camkord/app/models \
+    -v $(pwd)/app/recordings:/opt/camkord/app/recordings \
+    -v $(pwd)/app/snapshots:/opt/camkord/app/snapshots \
+    -v $(pwd)/frontend/fonts:/opt/camkord/frontend/fonts \
+    camkord-app
+```
+**Explanation of `docker run` options:**
+*   `-d`: Run in detached mode (background).
+*   `--name camkord-instance`: Assign a name to the container.
+*   `-p 8000:8000`: Map port 8000 of the host to port 8000 in the container.
+*   `-e VARIABLE="value"`: Set environment variables. **Crucially, set `SECRET_KEY`, `DATA_ENCRYPTION_KEY`, and `CAMERA_SUITE_ADMIN_PASS` here.**
+*   `-v $(pwd)/host/path:/container/path`: Mount volumes for persistent data.
+    *   `app/data`: For the SQLite database.
+    *   `app/models`: For YOLO model files (if not copied into image during build).
+    *   `app/recordings`: For video recordings.
+    *   `app/snapshots`: For snapshots.
+    *   `frontend/fonts`: For font files (if not copied into image).
+    Adjust `$(pwd)` (or use absolute paths) based on where you run the command.
+
+**5. Accessing the Application:**
+Once the container is running, access the application at `http://localhost:8000` (or your server's IP/domain if deployed remotely).
+
+**6. Viewing Logs:**
+```bash
+docker logs camkord-instance
+```
+
+**7. Stopping the Container:**
+```bash
+docker stop camkord-instance
 ```

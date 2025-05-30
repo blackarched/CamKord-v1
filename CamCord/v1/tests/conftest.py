@@ -35,20 +35,20 @@ def db_session_fixture(db_engine_fixture):
     transaction = connection.begin()
     TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=connection)
     db = TestSessionLocal()
-    
+
     # Store the original CameraManager db_session and replace it
     # This is crucial for tests that indirectly use CameraManager's session
     original_cm_db_session = None
     if hasattr(camera_manager_global, 'db_session'): # Check if attribute exists
          original_cm_db_session = camera_manager_global.db_session
          camera_manager_global.db_session = db
-    
+
     yield db
-    
+
     db.close()
     transaction.rollback()
     connection.close()
-    
+
     # Restore CameraManager's original session
     if hasattr(camera_manager_global, 'db_session') and original_cm_db_session is not None: # Check again before restoring
         camera_manager_global.db_session = original_cm_db_session
@@ -57,7 +57,7 @@ def db_session_fixture(db_engine_fixture):
 @pytest.fixture(scope="function")
 def test_client_fixture(db_session_fixture: SQLAlchemySession):
     """Provides a TestClient for API testing, with DB dependency overridden."""
-    
+
     def override_get_db():
         try:
             yield db_session_fixture
@@ -65,14 +65,14 @@ def test_client_fixture(db_session_fixture: SQLAlchemySession):
             pass
 
     app.dependency_overrides[get_db] = override_get_db
-    
+
     # Ensure CameraManager uses the test DB session for its operations AND reloads its state
     # The camera_manager_global.db_session is already patched by db_session_fixture.
     # Now, explicitly reload its camera list using this test session.
     if hasattr(camera_manager_global, 'reload_cameras_from_db'):
-        camera_manager_global.reload_cameras_from_db() 
-    
+        camera_manager_global.reload_cameras_from_db()
+
     with TestClient(app) as c:
         yield c
-    
+
     app.dependency_overrides.clear()

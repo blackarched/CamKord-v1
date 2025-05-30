@@ -1,13 +1,17 @@
 import cv2
 import asyncio
 from starlette.websockets import WebSocketDisconnect
-from fastapi import FastAPI, WebSocket, Depends, Query # Added Query
+from fastapi import FastAPI, WebSocket, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session # Added Session
-from jose import JWTError, jwt # Added jose imports
+from sqlalchemy.orm import Session
+from jose import JWTError, jwt
+from starlette.requests import Request # Added for SlowAPI
+from slowapi import Limiter, _rate_limit_exceeded_handler # Added for SlowAPI
+from slowapi.util import get_remote_address # Added for SlowAPI
+from slowapi.errors import RateLimitExceeded # Added for SlowAPI
 
 from .user_auth_backend import get_current_user # This is for HTTP routes
-from .user_auth_backend import TokenData, get_db as get_user_auth_db_session # For WS auth
+from .user_auth_backend import TokenData, get_db as get_user_auth_db_session
 from .dashboard_backend import router as api_router
 from .user_auth_backend import auth_router
 from .config import settings
@@ -25,13 +29,13 @@ print("Database initialization check complete.")
 
 # WebSocket Authentication Dependency
 async def get_current_user_from_ws_token(
-    token: Optional[str] = Query(None), 
+    token: Optional[str] = Query(None),
     db: Session = Depends(get_user_auth_db_session)
 ) -> Optional[DBUser]:
     if token is None:
         print("[WS Auth] No token provided in query.")
-        return None 
-    
+        return None
+
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         username: Optional[str] = payload.get("sub")
@@ -39,7 +43,7 @@ async def get_current_user_from_ws_token(
             print("[WS Auth] Token payload missing 'sub' (username).")
             return None
         # TokenData might not be strictly needed if just using username from payload
-        # token_data = TokenData(username=username) 
+        # token_data = TokenData(username=username)
     except JWTError as e:
         print(f"[WS Auth] JWTError: {e}")
         return None # Invalid token
@@ -49,11 +53,14 @@ async def get_current_user_from_ws_token(
         print(f"[WS Auth] User '{username}' not found in DB.")
     return user
 
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute", "5000/hour"])
 app = FastAPI(title="SecurityCam Suite API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Global CameraManager instance
 # This session is dedicated to the CameraManager's lifetime
-db_session_for_camera_manager = SessionLocal() 
+db_session_for_camera_manager = SessionLocal()
 camera_manager_global = CameraManager(db_session=db_session_for_camera_manager)
 
 @app.on_event("shutdown")
@@ -85,11 +92,11 @@ app.include_router(auth_router, tags=["Authentication"]) # Routes in auth_router
 
 @app.websocket("/ws/stream/{camera_id}")
 async def stream_endpoint(
-    websocket: WebSocket, 
-    camera_id: str, 
+    websocket: WebSocket,
+    camera_id: str,
     # user = Depends(get_current_user), # Replaced with new WS auth dependency
     authenticated_user: Optional[DBUser] = Depends(get_current_user_from_ws_token),
-    cm: CameraManager = Depends(get_camera_manager_dependency) 
+    cm: CameraManager = Depends(get_camera_manager_dependency)
 ):
     await websocket.accept()
 
@@ -98,10 +105,10 @@ async def stream_endpoint(
         await websocket.send_text("Error: Authentication failed or token missing.")
         await websocket.close(code=4001) # Custom WebSocket close code for auth failure
         return
-    
+
     # If authenticated, you can use authenticated_user.username, etc.
     print(f"User '{authenticated_user.username}' authenticated for WebSocket stream on camera {camera_id}.")
-    
+
     try:
         int_camera_id = int(camera_id)
     except ValueError:
@@ -121,13 +128,13 @@ async def stream_endpoint(
     stream_fps = 30 # Default
     if managed_cam.settings and hasattr(managed_cam.settings, 'frame_rate') and managed_cam.settings.frame_rate:
         stream_fps = managed_cam.settings.frame_rate
-    
+
     frame_interval = 1.0 / stream_fps
 
     try:
         while True:
             frame = cm.get_frame_from_camera(int_camera_id) # This gets the processed frame
-            
+
             if frame is not None:
                 ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if ret:

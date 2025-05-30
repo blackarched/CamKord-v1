@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.git/
+.gitignore
+test.db
+test.db-journal
+*.log
+# Add other files/directories to ignore during docker build context

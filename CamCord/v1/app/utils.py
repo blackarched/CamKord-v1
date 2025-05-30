@@ -51,10 +51,10 @@ def save_video_clip(camera_id: str, frames: list, fps: int = 20) -> str:
 
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter(str(file_path), fourcc, fps, (width, height))
-    
+
     for frame in frames:
         out.write(frame)
-    
+
     out.release()
     log_event("video", f"Video clip saved: {file_path}")
     return str(file_path)

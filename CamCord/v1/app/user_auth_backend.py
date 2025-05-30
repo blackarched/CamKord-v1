@@ -2,7 +2,7 @@ user_auth_backend.py
 
 Production-ready user authentication backend using FastAPI with JWT
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request # Added Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 # Local imports
 from .database import SessionLocal, User as DBUser
-from .config import settings # Added import
+from .config import settings
+from .main import limiter # Added limiter import
 # from .schemas import UserLogin # OAuth2PasswordRequestForm is used instead
 
 # SECRET_KEY is now sourced from settings
@@ -55,7 +56,7 @@ def authenticate_user(db: Session, username: str, password: str) -> DBUser | Non
         return None
     # Use pwd_context for verification if DBUser.verify_password is not using a compatible scheme
     # Assuming DBUser.verify_password is compatible as per database.py structure
-    if not user.verify_password(password): 
+    if not user.verify_password(password):
         return None
     return user
 
@@ -83,14 +84,19 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    
+
     user = db.query(DBUser).filter(DBUser.username == token_data.username).first()
     if user is None:
         raise credentials_exception
     return user # Returns the SQLAlchemy DBUser object
 
 @auth_router.post("/auth/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("10/minute") # More strict limit for login
+async def login_for_access_token(
+    request: Request, # Add request parameter
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
     user = authenticate_user(db=db, username=form_data.username, password=form_data.password)
     if not user:
         raise HTTPException(
@@ -108,4 +114,3 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @auth_router.get("/auth/me", response_model=UserPublicInfo) # Updated response_model
 async def read_users_me(current_user: DBUser = Depends(get_current_user)): # current_user is now DBUser
     return current_user # FastAPI will convert DBUser to UserPublicInfo due to orm_mode
-

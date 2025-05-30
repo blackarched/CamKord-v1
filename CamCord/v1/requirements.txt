@@ -7,3 +7,7 @@ passlib[bcrypt]
 opencv-python
 numpy
 python-multipart
+slowapi
+cryptography
+gunicorn
+alembic

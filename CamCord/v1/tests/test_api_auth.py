@@ -4,13 +4,13 @@ from sqlalchemy.orm import Session
 import os
 
 # Assuming conftest.py correctly adds 'app' to sys.path OR pytest.ini handles pythonpath
-from database import User as DBUser 
+from database import User as DBUser
 from config import settings as app_settings # Not strictly needed here but good for consistency
 
 # Helper to create admin user
 def create_test_admin_user(db: Session, username="admin", password_override=None):
     admin_pass = password_override or os.getenv("CAMERA_SUITE_ADMIN_PASS", "testadmin123")
-    
+
     admin_user = db.query(DBUser).filter(DBUser.username == username).first()
     if not admin_user:
         hashed_pw = DBUser.hash_password(admin_pass)
@@ -40,7 +40,7 @@ def test_read_users_me_valid_token(test_client_fixture: TestClient, db_session_f
     _, admin_pass = create_test_admin_user(db_session_fixture, username="testmeuser")
     login_response = test_client_fixture.post("/auth/token", data={"username": "testmeuser", "password": admin_pass})
     token = login_response.json()["access_token"]
-    
+
     headers = {"Authorization": f"Bearer {token}"}
     response = test_client_fixture.get("/auth/me", headers=headers)
     assert response.status_code == 200, response.text

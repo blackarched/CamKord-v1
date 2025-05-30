@@ -77,4 +77,3 @@ return Response(content=buffer.tobytes(), media_type="image/jpeg")
 @app.post("/set_zoom/{level}") def set_zoom(level: float): if 1.0 <= level <= 4.0: settings["zoom"] = level return {"zoom": level} else: return JSONResponse(status_code=400, content={"error": "Zoom level must be between 1.0 and 4.0"})
 
 @app.get("/status") def get_status(): return settings
-

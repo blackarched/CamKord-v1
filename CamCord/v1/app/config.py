@@ -28,6 +28,11 @@ LOG_DIR: str = Field("logs", env="LOG_DIR")
 # Comma-separated list of allowed origins for CORS. E.g., "https://yourdomain.com,https://www.yourdomain.com"
 CORS_ALLOWED_ORIGINS: List[str] = Field(default=["http://localhost:3000"], env="CORS_ALLOWED_ORIGINS")
 
+    # For encrypting/decrypting snapshots.
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # Store this key securely as an environment variable.
+    DATA_ENCRYPTION_KEY: Optional[str] = Field(default=None, env="DATA_ENCRYPTION_KEY")
+
 class Config:
     env_file = ".env"
     case_sensitive = True
@@ -35,4 +40,3 @@ class Config:
 Instantiate a single settings object for import
 
 settings = Settings()
-
