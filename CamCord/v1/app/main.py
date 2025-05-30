@@ -12,8 +12,12 @@ from .dashboard_backend import router as api_router
 from .user_auth_backend import auth_router
 from .config import settings
 from .camera_manager import CameraManager
-from .database import SessionLocal, init_db, User as DBUser # Added DBUser
-from typing import Optional # For Optional type hint
+from .database import SessionLocal, init_db, User as DBUser
+from typing import Optional
+import os # Added
+from fastapi.staticfiles import StaticFiles # Added
+from fastapi import HTTPException # Added (for potential explicit error raising)
+
 
 print("Initializing database (if needed)...")
 init_db() # Call to create tables based on models
@@ -159,3 +163,28 @@ async def stream_endpoint(
         # FastAPI handles closing on context exit or if an unhandled exception propagates.
         # No explicit websocket.close() here to avoid errors if already closed.
         pass
+
+# --- Serve Frontend Static Files ---
+
+# Get the directory where main.py is located (i.e., CamCord/v1/app)
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construct the path to the frontend directory (CamCord/v1/frontend)
+FRONTEND_DIR = os.path.join(current_script_dir, "..", "frontend")
+
+# Check if the calculated FRONTEND_DIR actually exists
+if not os.path.exists(FRONTEND_DIR) or not os.path.isdir(FRONTEND_DIR):
+    print(f"!!! WARNING !!!")
+    print(f"Frontend directory not found at the calculated path: {FRONTEND_DIR}")
+    print(f"Current script directory (__file__): {__file__}")
+    print(f"Please ensure the 'frontend' folder is located at CamCord/v1/frontend")
+    # Optionally, raise an error or exit if frontend is critical
+    # raise RuntimeError(f"Frontend directory not found: {FRONTEND_DIR}")
+else:
+    print(f"Attempting to serve static files from: {FRONTEND_DIR}")
+    try:
+        app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="static-frontend-root")
+        print(f"Frontend successfully mounted at '/'. Access at http://localhost:8000/")
+    except Exception as e:
+        print(f"!!! ERROR mounting static files: {e} !!!")
+        print(f"Please check the directory path and permissions for {FRONTEND_DIR}")
