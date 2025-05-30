@@ -7,13 +7,26 @@
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+  <section id="login-section" style="padding: 20px; text-align: center;">
+      <h2>Login</h2>
+      <div>
+          <label for="username">Username:</label>
+          <input type="text" id="username" name="username" value="admin" style="margin-bottom: 10px;"><br>
+          <label for="password">Password:</label>
+          <input type="password" id="password" name="password" value="admin123" style="margin-bottom: 10px;"><br>
+          <button id="login-button">Login</button>
+          <p id="login-message" style="color: red; margin-top: 10px;"></p>
+      </div>
+  </section>
   <header>
     <h1>Camera Monitoring Dashboard</h1>
+    <button id="logout-button" style="display:none; float: right; margin: 10px;">Logout</button>
   </header>
 
-  <main>
-    <section id="camera-controls">
-      <h2>Controls</h2>
+  <div id="main-app-content" style="display:none;">
+    <main>
+      <section id="camera-controls">
+        <h2>Controls</h2>
       <div class="control-buttons">
         <button id="refresh-feed">Refresh Feed</button>
         <button id="toggle-night-vision">Toggle Night Vision</button>
@@ -33,6 +46,7 @@
       <ul id="camera-list-container"></ul>
     </section>
   </main>
+  </div>
 
   <footer>
     <p>&copy; 2025 Camera Tool</p>
