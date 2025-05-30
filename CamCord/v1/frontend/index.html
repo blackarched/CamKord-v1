@@ -4,55 +4,69 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Camera Dashboard</title>
+  <link rel="stylesheet" href="cyberpunk-theme.css">
   <link rel="stylesheet" href="style.css"/>
 </head>
-<body>
-  <section id="login-section" style="padding: 20px; text-align: center;">
-      <h2>Login</h2>
-      <div>
-          <label for="username">Username:</label>
-          <input type="text" id="username" name="username" value="admin" style="margin-bottom: 10px;"><br>
-          <label for="password">Password:</label>
-          <input type="password" id="password" name="password" value="admin123" style="margin-bottom: 10px;"><br>
-          <button id="login-button">Login</button>
-          <p id="login-message" style="color: red; margin-top: 10px;"></p>
+<body class="bg-dark fg-cyan oxanium-font"> 
+  <section id="login-section" class="cyber-tile bg-dark fg-yellow ac-yellow cyber-razor-bottom" style="padding: 20px; text-align: center; margin: 50px auto; width: fit-content;">
+      <h2 class="cyber-h cyberpunk-font-og ac-yellow" style="margin-bottom: 30px; width:auto;">Login Access</h2>
+      <div style="margin-bottom: 20px;"> <!-- Wrapper for inputs -->
+          <div class="cyber-input ac-cyan fg-cyan" style="margin-bottom: 15px; display: inline-block; position:relative;">
+              <label for="username" class="cyberpunk-font fg-yellow" style="display: block; text-align: left; margin-left: var(--input-padding-left); margin-bottom: 5px;">SYSTEM ID:</label>
+              <input type="text" id="username" name="username" value="admin">
+          </div>
+          <br> <!-- Simple line break for layout -->
+          <div class="cyber-input ac-cyan fg-cyan" style="margin-bottom: 15px; display: inline-block; position:relative;">
+              <label for="password" class="cyberpunk-font fg-yellow" style="display: block; text-align: left; margin-left: var(--input-padding-left); margin-bottom: 5px;">PASSCODE:</label>
+              <input type="password" id="password" name="password" value="admin123">
+          </div>
       </div>
+      <button id="login-button" 
+              class="cyber-button fg-yellow bg-purple ac-yellow cyberpunk-font" 
+              data-text="ACCESS" style="--button-shadow-primary: var(--yellow); --button-shadow-secondary: var(--cyan);">
+          ACCESS GRANTED
+          <span class="tag">ENGAGE</span>
+      </button>
+      <p id="login-message" class="cyberpunk-font fg-red" style="margin-top: 20px; min-height: 1.5em;"></p>
   </section>
   <header>
-    <h1>Camera Monitoring Dashboard</h1>
-    <button id="logout-button" style="display:none; float: right; margin: 10px;">Logout</button>
+    <h1 class="cyber-banner fg-black cyberpunk-font-og" style="--banner-color1: var(--yellow); --banner-color2: var(--cyan); --banner-color3: var(--red); --banner-color4: var(--purple); --banner-gradient-stop: 350px; line-height: 50px; font-size: 1.8rem;">SYSTEM MONITOR</h1>
+    <button id="logout-button" class="cyber-button-small bg-red fg-yellow ac-red cyberpunk-font" style="display:none; position: absolute; top: 10px; right: 10px;" data-text="LOGOUT">LOGOUT<span class="tag">ESC</span></button>
   </header>
 
   <div id="main-app-content" style="display:none;">
-    <div id="app-message-area" style="padding: 10px; text-align: center; display: none; border: 1px solid transparent; border-radius: 4px; margin-bottom:15px;">
-        <p id="app-message-text" style="margin: 0; font-weight: bold;"></p>
-    </div>
     <main>
-      <section id="camera-controls">
-        <h2>Controls</h2>
-      <div class="control-buttons">
-        <button id="refresh-feed">Refresh Feed</button>
-        <button id="toggle-night-vision">Toggle Night Vision</button>
-        <button id="toggle-autofocus">Toggle Auto Focus</button>
-      </div>
-    </section>
+      <div style="max-width: 1200px; margin: 0 auto; padding: 20px;"> 
+        <div id="app-message-area" class="cyber-tile ac-cyan fg-cyan cyber-glitch-2" style="background-color: rgba(10,20,30,0.8); padding: 10px; text-align: center; display: none; border: 1px solid var(--cyan); border-radius: 4px; margin: 15px auto; width: 80%;">
+            <p id="app-message-text" style="margin: 0; font-weight: bold;"></p>
+        </div>
 
-    <section id="live-feed">
-      <h2>Live Feed</h2>
-      <div id="feed-container">
-        <img id="camera-feed" src="" alt="Live Camera Feed"/>
-      </div>
-    </section>
+        <section id="camera-controls" class="cyber-tile ac-yellow fg-yellow cyber-razor-top" style="background-color: rgba(30,30,40,0.85); padding:15px; margin-bottom:20px;">
+          <h2 class="cyber-h cyberpunk-font-og ac-yellow" style="width:auto; margin-bottom:20px;">SYSTEM CONTROLS</h2>
+          <div class="control-buttons" style="display: flex; flex-wrap: wrap; gap: 10px;">
+            <button id="refresh-feed" class="cyber-button-small cyberpunk-font bg-cyan fg-black ac-black" data-text="RFRSH" style="margin: 5px;">Refresh Feed<span class="tag">F5</span></button>
+            <button id="toggle-night-vision" class="cyber-button-small cyberpunk-font bg-cyan fg-black ac-black" data-text="NV" style="margin: 5px;">Night Vision<span class="tag">N</span></button>
+            <button id="toggle-autofocus" class="cyber-button-small cyberpunk-font bg-cyan fg-black ac-black" data-text="AF" style="margin: 5px;">Auto Focus<span class="tag">A</span></button>
+          </div>
+        </section>
 
-    <section id="camera-list">
-      <h2>Connected Cameras</h2>
-      <ul id="camera-list-container"></ul>
-    </section>
-  </main>
+        <section id="live-feed" class="cyber-tile bg-black ac-cyan fg-cyan cyber-razor-top" style="padding:15px; margin-bottom:20px;">
+          <h2 class="cyber-h cyberpunk-font-og ac-cyan" style="width:auto; margin-bottom:20px;">VISUAL FEED</h2>
+          <div id="feed-container">
+            <img id="camera-feed" src="" alt="Live Camera Feed" class="cyber-glitch-1" style="width: 100%; min-height: 240px; background-color: #111; border: 2px solid var(--cyan); object-fit: cover;"/>
+          </div>
+        </section>
+
+        <section id="camera-list" class="cyber-tile ac-purple fg-purple cyber-razor-top" style="background-color: rgba(30,30,40,0.85); padding:15px; margin-bottom:20px;">
+          <h2 class="cyber-h cyberpunk-font-og ac-purple" style="width:auto; margin-bottom:15px;">NETWORK ASSETS</h2>
+          <ul id="camera-list-container" class="cyber-ul-1 ac-purple" style="max-height: 200px; overflow-y: auto; padding-right: 10px;"></ul>
+        </section>
+      </div>
+    </main>
   </div>
 
-  <footer>
-    <p>&copy; 2025 Camera Tool</p>
+  <footer class="bg-black">
+    <p class="cyberpunk-font fg-yellow" style="text-align:center; padding: 20px 10px; border-top: 2px solid var(--yellow);">&copy; 2077 CamKord Systems - Secure Watch Division</p>
   </footer>
 
   <script src="app.js"></script>

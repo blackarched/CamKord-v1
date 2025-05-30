@@ -4,78 +4,74 @@
   box-sizing: border-box;
 }
 
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f4f4f4;
-  color: #333;
-  padding: 20px;
-}
-
-header, footer {
-  text-align: center;
-  padding: 10px 0;
-  background-color: #1f2937;
-  color: white;
-}
-
-main {
-  max-width: 1200px;
-  margin: auto;
-  padding: 20px;
-}
-
-section {
-  margin-bottom: 40px;
-}
-
-h2 {
-  margin-bottom: 10px;
-  color: #111827;
-}
-
+/* Layout for the group of control buttons */
 .control-buttons {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 15px; /* Spacing between cyberpunk buttons */
+  justify-content: center; /* Center buttons within their container tile */
+  flex-wrap: wrap; /* Allow buttons to wrap if space is limited */
+  margin-top: 10px; /* Space above the button group if needed */
+  margin-bottom: 10px; /* Space below the button group */
 }
 
-button {
-  padding: 10px 15px;
-  border: none;
-  background-color: #2563eb;
-  color: white;
-  cursor: pointer;
-  border-radius: 5px;
-  font-size: 14px;
-}
-
-button:hover {
-  background-color: #1e40af;
-}
-
-#feed-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border: 2px solid #ccc;
-  padding: 10px;
-  background-color: white;
-}
-
-#camera-feed {
-  max-width: 100%;
-  max-height: 500px;
-  border-radius: 8px;
-}
-
-#camera-list-container {
-  list-style-type: none;
-  padding-left: 0;
-}
-
+/* Styling for the selected camera in the list */
+/* This assumes the ul has class 'cyber-ul-1 ac-purple' as set in index.html */
+/* and body has 'fg-cyan' */
 #camera-list-container li {
-  padding: 8px;
-  background: #e5e7eb;
-  margin: 5px 0;
-  border-radius: 4px;
+    padding: 8px 10px; /* Add some padding to list items */
+    cursor: pointer;
+    border-bottom: 1px solid var(--purple); /* Separator, using --ac color from ul */
+    color: var(--cyan); /* Default text color for items */
+    transition: background-color 0.2s, color 0.2s;
+}
+
+#camera-list-container li:hover {
+    background-color: var(--purple);
+    color: var(--yellow);
+}
+
+#camera-list-container li.selected-camera {
+    background-color: var(--yellow) !important; /* Cyberpunk yellow for selected */
+    color: var(--black) !important; /* Black text for contrast on yellow */
+    /* Override the ::before pseudo-element's color if needed, by changing its --ac */
+    --ac-list-item-selected: var(--black); /* Custom var for selected item's bullet */
+}
+
+/* To change the bullet color of a selected item, if .cyber-ul-1 uses --ac for its bullet */
+/* This is a bit more complex as ::before inherits --ac. We might need to adjust HTML or use more specific selectors if this doesn't work. */
+/* A simpler way: if the .cyber-ul-1 is ac-purple, its bullets are purple. */
+/* For selected item, if we want a black bullet: */
+#camera-list-container li.selected-camera::before {
+    background-color: var(--black); /* Directly target the bullet of selected item */
+}
+
+/* Ensure that the main image feed has a defined aspect ratio or height */
+/* This was previously inline, but good to have a class or ensure it's covered */
+#camera-feed {
+    display: block; /* Remove extra space below if it's inline */
+    width: 100%;
+    /* Consider aspect-ratio for responsive height, or a fixed/max-height */
+    /* aspect-ratio: 16 / 9; */
+    min-height: 240px; /* Retain from inline */
+    max-height: 60vh; /* Example max height */
+    object-fit: cover; /* Retain from inline */
+    background-color: #111; /* Retain from inline */
+    border: 2px solid var(--cyan); /* Retain from inline */
+}
+
+/* Ensure labels within cyber-input are visible against dark backgrounds */
+.cyber-input label {
+    /* The theme might not explicitly color labels inside .cyber-input */
+    /* Assuming default text color is cyan from body.fg-cyan, yellow from label.fg-yellow */
+    /* No specific override needed here if HTML classes are correct. */
+}
+
+/* Default link styling if any <a> tags are used without .cyber-a */
+a {
+    color: var(--cyan);
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+    color: var(--yellow);
 }
