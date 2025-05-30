@@ -16,8 +16,8 @@ from .config import settings # Added import
 # from .schemas import UserLogin # OAuth2PasswordRequestForm is used instead
 
 # SECRET_KEY is now sourced from settings
-ALGORITHM = "HS256" # This could also be moved to config if needed
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 # This is also in config.py, consider using settings.ACCESS_TOKEN_EXPIRE_MINUTES
+ALGORITHM = "HS256" # Algorithm is kept hardcoded as per current design
+# ACCESS_TOKEN_EXPIRE_MINUTES is sourced from settings where used. Removed global here.
 
 auth_router = APIRouter()
 

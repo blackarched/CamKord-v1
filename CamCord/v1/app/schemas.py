@@ -34,6 +34,18 @@ class UserResponse(UserBase): # Modified
     class Config:
         orm_mode = True
 
+# New CameraInfo schema for list_cameras endpoint
+class CameraInfo(BaseModel):
+    id: int
+    name: str
+    rtsp_url: Optional[str] = None
+    is_running: bool
+    motion_detection_enabled: Optional[bool] = None
+    object_detection_enabled: Optional[bool] = None
+            
+    class Config:
+        orm_mode = True # If you might populate from an ORM object directly later
+
 
 # ========== CAMERA SCHEMAS ==========
 
@@ -73,6 +85,15 @@ class CameraSettingsBase(BaseModel):
     saturation: Optional[int] = Field(default=50, ge=0, le=100)
     sharpness: Optional[int] = Field(default=50, ge=0, le=100)
     microphone_enabled: Optional[bool] = True
+
+    # Motion detection settings
+    motion_detection_enabled: Optional[bool] = False
+    motion_sensitivity: Optional[int] = Field(default=30, ge=0, le=100)
+    record_on_motion: Optional[bool] = False
+    motion_min_area: Optional[int] = Field(default=500, ge=100, le=10000)
+
+    # Object detection settings
+    object_detection_enabled: Optional[bool] = False
 
 class CameraSettingsCreate(CameraSettingsBase):
     # No camera_id here, assumes it's part of path or parent resource

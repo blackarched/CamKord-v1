@@ -14,7 +14,7 @@ from database import User, EventLog, CameraSettings as DBCameraSettings # Ensure
 from .user_auth_backend import get_current_user
 from .camera_manager import CameraManager # For type hinting
 from .main import get_camera_manager_dependency
-from .schemas import CameraSettingsUpdate # Added for settings update endpoint
+from .schemas import CameraSettingsUpdate, CameraInfo, CameraSettingsResponse # Updated imports
 from .config import settings # Added for SNAPSHOT_DIR
 
 # --- Initialize database ---
@@ -39,26 +39,24 @@ def get_db() -> Session: # This is a general DB session, CameraManager has its o
 
 # --- API Endpoints ---
 
-@router.get('/cameras', tags=['Cameras'])
+@router.get('/cameras', tags=['Cameras'], response_model=List[CameraInfo])
 def list_cameras(
     user=Depends(get_current_user),
     cm: CameraManager = Depends(get_camera_manager_dependency)
 ):
     managed_cams = cm.get_all_cameras()
-    # Adapt the response to provide useful info, e.g., from ManagedCamera attributes
-    return [
-        {
-            "id": cam.camera_id, 
-            "name": cam.name, 
-            "rtsp_url": cam.rtsp_url, 
-            "is_running": cam.is_running,
-            "settings": { # Basic settings example, expand as needed
-                "resolution": cam.settings.resolution if cam.settings else None,
-                "night_vision": cam.settings.night_vision if cam.settings else None,
-            }
-        } 
-        for cam in managed_cams
-    ]
+    cameras_info = []
+    for cam in managed_cams:
+        cam_info = CameraInfo(
+            id=cam.camera_id,
+            name=cam.name,
+            rtsp_url=cam.rtsp_url,
+            is_running=cam.is_running,
+            motion_detection_enabled=cam.settings.motion_detection_enabled if cam.settings else None,
+            object_detection_enabled=cam.settings.object_detection_enabled if cam.settings else None
+        )
+        cameras_info.append(cam_info)
+    return cameras_info
 
 # Removed old /cameras/{camera_id}/feed
 
@@ -114,7 +112,7 @@ def get_events(limit: int = 100, db: Session = Depends(get_db), user=Depends(get
     events = db.query(EventLog).order_by(EventLog.timestamp.desc()).limit(limit).all()
     return [{'timestamp': e.timestamp, 'camera_id': e.camera_id, 'type': e.event_type, 'message': e.event_description} for e in events] # Changed e.message to e.event_description
 
-@router.get('/settings/{camera_id}', tags=['Settings'])
+@router.get('/settings/{camera_id}', tags=['Settings'], response_model=CameraSettingsResponse)
 def get_camera_settings(camera_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
     # Assuming camera_id in CameraSettings is now an Integer ForeignKey
     settings = db.query(DBCameraSettings).filter(DBCameraSettings.camera_id == camera_id).first()
@@ -127,12 +125,13 @@ def get_camera_settings(camera_id: int, db: Session = Depends(get_db), user=Depe
     # For now, returning the object. Schemas will handle serialization.
     return settings
 
-@router.post('/settings/{camera_id}', tags=['Settings'])
+@router.post('/settings/{camera_id}', tags=['Settings'], response_model=CameraSettingsResponse)
 def update_camera_settings(
     camera_id: int, 
-    settings_update_data: CameraSettingsUpdate, # Changed type to Pydantic schema
+    settings_update_data: CameraSettingsUpdate,
     db: Session = Depends(get_db), 
-    user=Depends(get_current_user)
+    user = Depends(get_current_user),
+    cm: CameraManager = Depends(get_camera_manager_dependency) # Added CameraManager dependency
 ):
     record = db.query(DBCameraSettings).filter(DBCameraSettings.camera_id == camera_id).first()
     if not record:
@@ -145,6 +144,11 @@ def update_camera_settings(
     
     db.commit()
     db.refresh(record)
+
+    # Notify the camera manager that this camera's settings have changed
+    if record: # Ensure record is not None before accessing camera_id
+        cm.notify_settings_updated(camera_id=record.camera_id, db_session_for_reload=db)
+
     return record # Return the updated record
 
 @router.post("/cameras/{camera_id}/snapshot", tags=["Cameras"])
@@ -170,13 +174,51 @@ async def take_camera_snapshot(
         if not success:
             raise HTTPException(status_code=500, detail="Failed to save snapshot")
 
-        # TODO: Consider adding an EventLog entry here
+        # TODO: Consider adding an EventLog entry here - Addressed
         print(f"Snapshot saved: {file_path}") # Basic logging
+        cm.record_camera_event(camera_id=camera_id, event_type="snapshot_taken", description=f"Snapshot taken: {filename}")
 
         return JSONResponse(content={"message": "Snapshot saved", "filename": filename, "filepath": file_path})
     except Exception as e:
         print(f"Error taking snapshot: {e}")
         raise HTTPException(status_code=500, detail=f"Error taking snapshot: {str(e)}")
+
+@router.post("/cameras/{camera_id}/recording/start", tags=["Cameras"])
+async def start_camera_recording_api(
+    camera_id: int,
+    user = Depends(get_current_user),
+    cm: CameraManager = Depends(get_camera_manager_dependency)
+):
+    managed_cam = cm.get_camera(camera_id)
+    if not managed_cam or not managed_cam.is_running: # Check if camera is active
+        raise HTTPException(status_code=404, detail="Camera not found or not currently running")
+    if managed_cam.is_recording:
+        return JSONResponse(content={"message": "Camera is already recording"}, status_code=400)
+    
+    if managed_cam.start_recording():
+        return JSONResponse(content={"message": "Recording started successfully"})
+    else:
+        # Generic error if start_recording returned False for other reasons (e.g., can't get frame)
+        raise HTTPException(status_code=500, detail="Failed to start recording. Check server logs.")
+
+@router.post("/cameras/{camera_id}/recording/stop", tags=["Cameras"])
+async def stop_camera_recording_api(
+    camera_id: int,
+    user = Depends(get_current_user),
+    cm: CameraManager = Depends(get_camera_manager_dependency)
+):
+    managed_cam = cm.get_camera(camera_id)
+    if not managed_cam:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    
+    if not managed_cam.is_recording:
+            return JSONResponse(content={"message": "Camera is not currently recording"}, status_code=400)
+
+    if managed_cam.stop_recording():
+        return JSONResponse(content={"message": "Recording stopped successfully"})
+    else:
+        # This case might be rare if stop_recording is robust
+        raise HTTPException(status_code=500, detail="Failed to stop recording cleanly. Check server logs.")
 
 --- Application Mounting ---
 # The following app instance is for standalone running of this dashboard,

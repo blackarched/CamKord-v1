@@ -90,6 +90,15 @@ class CameraSettings(Base):
     sharpness = Column(Integer, default=50)
     microphone_enabled = Column(Boolean, default=True)
 
+    # Motion detection settings
+    motion_detection_enabled = Column(Boolean, default=False)
+    motion_sensitivity = Column(Integer, default=30) # 0-100, 100=most sensitive
+    record_on_motion = Column(Boolean, default=False)
+    motion_min_area = Column(Integer, default=500) # Min contour area
+
+    # Object detection settings
+    object_detection_enabled = Column(Boolean, default=False)
+
     # Relationship for CameraSettings
     camera = relationship("Camera", back_populates="settings")
 
