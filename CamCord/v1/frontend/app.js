@@ -1,8 +1,8 @@
 document.addEventListener("DOMContentLoaded", () => {
     const feedImage = document.getElementById("camera-feed");
-    const refreshBtn = document.getElementById("refresh-feed"); // Will need to be auth-aware
-    const nightVisionBtn = document.getElementById("toggle-night-vision");
-    const autofocusBtn = document.getElementById("toggle-autofocus");
+    const refreshBtn = document.getElementById("refresh-feed");
+    // const nightVisionBtn = document.getElementById("toggle-night-vision"); // Removed
+    // const autofocusBtn = document.getElementById("toggle-autofocus"); // Removed
     const cameraListContainer = document.getElementById("camera-list-container");
 
     const loginSection = document.getElementById("login-section");
@@ -14,6 +14,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const loginMessage = document.getElementById("login-message");
     const appMessageArea = document.getElementById("app-message-area");
     const appMessageText = document.getElementById("app-message-text");
+
+    const selectedCameraIdDisplay = document.getElementById("selected-camera-id-display");
+    const settingResolution = document.getElementById("setting-resolution");
+    const settingBrightness = document.getElementById("setting-brightness");
+    const brightnessValueLabel = document.getElementById("brightness-value-label");
+    const settingContrast = document.getElementById("setting-contrast");
+    const contrastValueLabel = document.getElementById("contrast-value-label");
+    const settingSaturation = document.getElementById("setting-saturation");
+    const saturationValueLabel = document.getElementById("saturation-value-label");
+    const settingSharpness = document.getElementById("setting-sharpness");
+    const sharpnessValueLabel = document.getElementById("sharpness-value-label");
+    const settingNightVision = document.getElementById("setting-night-vision");
+    const settingAutofocus = document.getElementById("setting-autofocus");
+    const settingMicrophoneEnabled = document.getElementById("setting-microphone-enabled");
+    const settingObjectDetectionEnabled = document.getElementById("setting-object-detection-enabled");
+    const settingMotionDetectionEnabled = document.getElementById("setting-motion-detection-enabled");
+    const settingMotionSensitivity = document.getElementById("setting-motion-sensitivity");
+    const motionSensitivityValueLabel = document.getElementById("motion-sensitivity-value-label");
+    const settingMotionMinArea = document.getElementById("setting-motion-min-area");
+    const settingRecordOnMotion = document.getElementById("setting-record-on-motion");
+    const saveCameraSettingsButton = document.getElementById("save-camera-settings");
 
     let authToken = localStorage.getItem('authToken');
     const AUTH_API_BASE = "http://localhost:8000/auth"; // For /token
@@ -130,52 +151,68 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (loginButton) loginButton.addEventListener('click', handleLogin);
 
-    function handleLogout() {
-        if (videoSocket) {
-            console.log("Logging out, closing WebSocket.");
-            videoSocket.onclose = null; // Avoid default onclose logic during logout
-            videoSocket.close(1000, "User logged out"); // Normal closure
-            videoSocket = null;
-        }
-        authToken = null;
-        localStorage.removeItem('authToken');
-        if (feedImage) feedImage.src = "";
         if (cameraListContainer) cameraListContainer.innerHTML = "";
         currentCameraSettings = null;
-        updateControlsUI();
-        if (appMessageArea) appMessageArea.style.display = 'none'; // Clear app message on logout
+        updateControlsUI(null); // Pass null to reset UI
+        if (appMessageArea) appMessageArea.style.display = 'none';
         updateUIForAuthState();
     }
     if (logoutButton) logoutButton.addEventListener('click', handleLogout);
 
-    function updateControlsUI() {
-        if (!mainAppContent || mainAppContent.style.display === 'none') { // Don't update if UI hidden
-            if (nightVisionBtn) nightVisionBtn.disabled = true;
-            if (autofocusBtn) autofocusBtn.disabled = true;
-            return;
+    function updateControlsUI(settings) { // Takes settings as argument
+        const isEnabled = settings !== null && mainAppContent.style.display !== 'none';
+
+        if (selectedCameraIdDisplay) {
+            selectedCameraIdDisplay.textContent = settings ? selectedCameraId : "N/A";
         }
 
-        if (nightVisionBtn) {
-            nightVisionBtn.disabled = !currentCameraSettings;
-            nightVisionBtn.textContent = `Night Vision: ${currentCameraSettings && currentCameraSettings.night_vision ? 'ON' : 'OFF'}`;
-        }
-        if (autofocusBtn) {
-            autofocusBtn.disabled = !currentCameraSettings;
-            autofocusBtn.textContent = `Auto Focus: ${currentCameraSettings && currentCameraSettings.autofocus ? 'ON' : 'OFF'}`;
-        }
+        // Helper to set value and disabled state
+        const configureInput = (element, value, disabledState) => {
+            if (element) {
+                if (element.type === 'checkbox') element.checked = value;
+                else element.value = value;
+                element.disabled = disabledState;
+            }
+        };
+        const configureRangeWithValue = (rangeEl, labelEl, value, disabledState) => {
+            if (rangeEl) {
+                rangeEl.value = value;
+                rangeEl.disabled = disabledState;
+            }
+            if (labelEl) labelEl.textContent = disabledState ? '-' : value;
+        };
+
+        configureInput(settingResolution, settings ? settings.resolution : "1280x720", !isEnabled);
+        configureRangeWithValue(settingBrightness, brightnessValueLabel, settings ? settings.brightness : 50, !isEnabled);
+        configureRangeWithValue(settingContrast, contrastValueLabel, settings ? settings.contrast : 50, !isEnabled);
+        configureRangeWithValue(settingSaturation, saturationValueLabel, settings ? settings.saturation : 50, !isEnabled);
+        configureRangeWithValue(settingSharpness, sharpnessValueLabel, settings ? settings.sharpness : 50, !isEnabled);
+
+        configureInput(settingNightVision, settings ? settings.night_vision : false, !isEnabled);
+        configureInput(settingAutofocus, settings ? settings.autofocus : true, !isEnabled);
+        configureInput(settingMicrophoneEnabled, settings ? settings.microphone_enabled : true, !isEnabled);
+        configureInput(settingObjectDetectionEnabled, settings ? settings.object_detection_enabled : false, !isEnabled);
+
+        configureInput(settingMotionDetectionEnabled, settings ? settings.motion_detection_enabled : false, !isEnabled);
+        configureRangeWithValue(settingMotionSensitivity, motionSensitivityValueLabel, settings ? settings.motion_sensitivity : 30, !isEnabled);
+        configureInput(settingMotionMinArea, settings ? settings.motion_min_area : 500, !isEnabled);
+        configureInput(settingRecordOnMotion, settings ? settings.record_on_motion : false, !isEnabled);
+
+        if (saveCameraSettingsButton) saveCameraSettingsButton.disabled = !isEnabled;
+        // Old button references (nightVisionBtn, autofocusBtn) and their logic removed as elements are gone.
     }
 
     async function fetchCameraSettings(cameraId) {
         if (!mainAppContent || mainAppContent.style.display === 'none') return;
 
-        if (!cameraId && cameraId !== 0) { // Allow cameraId 0 if valid
+        if (!cameraId && cameraId !== 0) {
             currentCameraSettings = null;
-            updateControlsUI();
+            updateControlsUI(null); // Pass null
             return;
         }
         if (!authToken) {
             currentCameraSettings = null;
-            updateControlsUI();
+            updateControlsUI(null); // Pass null
             return;
         }
 
@@ -192,13 +229,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         } catch (err) {
             console.error(`Error fetching settings for camera ${cameraId}:`, err);
-            // Only show message if not an 'Unauthorized' error, as handleLogout would have been called
             if (err.message !== 'Unauthorized') {
                 showAppMessage(`Error fetching settings for camera ${cameraId}. Check console.`, 'error', 5000);
             }
             currentCameraSettings = null;
         }
-        updateControlsUI();
+        updateControlsUI(currentCameraSettings); // Explicitly pass currentCameraSettings or null
     }
 
     function selectCamera(camera) {
@@ -234,40 +270,42 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    async function updateCameraSetting(settingName, newValue) {
-        if (selectedCameraId === null || !currentCameraSettings) {
-            alert("Please select a camera and ensure its settings are loaded.");
+    async function updateCameraSettingsBatch(payloadObject) {
+        if (selectedCameraId === null) {
+            showAppMessage("No camera selected to update settings for.", "error");
             return;
         }
-        if (!authToken) return;
+        if (!authToken || Object.keys(payloadObject).length === 0) {
+            console.log("No settings payload to update or not authenticated.");
+            return;
+        }
 
-        console.log(`Updating ${settingName} to ${newValue} for camera ${selectedCameraId}`);
-        const payload = { [settingName]: newValue };
+        showAppMessage("Applying configuration...", "info", 0);
 
+        console.log(`Updating settings for camera ${selectedCameraId} with payload:`, payloadObject);
         try {
             const response = await fetchWithAuth(`${API_BASE}/settings/${selectedCameraId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payloadObject)
             });
             if (response.ok) {
                 currentCameraSettings = await response.json();
-                console.log(`Setting '${settingName}' updated. New settings:`, currentCameraSettings);
-                showAppMessage(`Camera setting '${settingName}' updated successfully!`, 'success');
+                showAppMessage("Camera settings updated successfully!", 'success');
             } else {
-                const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
-                console.error(`Failed to update setting '${settingName}': ${response.status}`, errorData);
-                showAppMessage(`Failed to update '${settingName}': ${errorData.detail || response.statusText}`, 'error', 5000);
-                await fetchCameraSettings(selectedCameraId);
+                const errorData = await response.json().catch(() => ({ detail: "Unknown server error" }));
+                console.error(`Failed to update settings for camera ${selectedCameraId}: ${response.status}`, errorData);
+                showAppMessage(`Failed to update settings: ${errorData.detail || response.statusText}`, 'error', 5000);
+                if (selectedCameraId !== null) await fetchCameraSettings(selectedCameraId);
             }
         } catch (err) {
-            console.error(`Error updating setting '${settingName}':`, err);
-            if (err.message !== 'Unauthorized') { // Unauthorized already handled by fetchWithAuth->handleLogout
-                showAppMessage("Error updating setting. Please check console.", 'error', 5000);
-                await fetchCameraSettings(selectedCameraId);
+            console.error(`Error updating settings for camera ${selectedCameraId}:`, err);
+            if (err.message !== 'Unauthorized') {
+                showAppMessage("Error updating settings. Check console for details.", 'error', 5000);
+                if (selectedCameraId !== null) await fetchCameraSettings(selectedCameraId);
             }
         }
-        updateControlsUI();
+        updateControlsUI(currentCameraSettings);
     }
 
     async function fetchWithAuth(url, options = {}) {
@@ -393,18 +431,8 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  async function toggleNightVision() {
-    // TODO: This function will need to be adapted for a selected camera
-    // TODO: This function will need to be adapted for a selected camera
-    // and use fetchWithAuth.
-    // console.log("toggleNightVision called - needs update"); // Removed old placeholder
-  }
-
-  async function toggleAutofocus() {
-    // TODO: This function will need to be adapted for a selected camera
-    // and use fetchWithAuth.
-    // console.log("toggleAutofocus called - needs update"); // Removed old placeholder
-  }
+  // Old toggleNightVision and toggleAutofocus functions removed as their buttons are gone
+  // and functionality is replaced by the new settings panel and save button.
 
   async function loadCameras() {
     if (!authToken) return; // Don't try if not logged in
@@ -462,39 +490,80 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Comment out or adapt old event listeners
   // if (refreshBtn) refreshBtn.addEventListener("click", loadFeed); // Old loadFeed is not suitable
-  if (refreshBtn) { // Ensure button exists
-      refreshBtn.style.display = 'block'; // Make it visible now
+  if (refreshBtn) {
+      refreshBtn.style.display = 'block';
       refreshBtn.addEventListener('click', () => {
-          if (selectedCameraId !== null) { // Check if a camera is selected
+          if (selectedCameraId !== null) {
               console.log(`Refresh button clicked for camera ID: ${selectedCameraId}`);
               loadFeed(selectedCameraId);
           } else {
               console.log("Refresh button clicked, but no camera selected.");
-              loadFeed(null); // Clear feed if no camera selected
-          }
-      });
-  }
-  // Updated Event Listeners for Control Buttons
-  if (nightVisionBtn) {
-      nightVisionBtn.addEventListener('click', () => {
-          if (currentCameraSettings && selectedCameraId !== null) {
-              updateCameraSetting('night_vision', !currentCameraSettings.night_vision);
-          } else {
-              alert("Select a camera; settings not loaded.");
+              loadFeed(null);
           }
       });
   }
 
-  if (autofocusBtn) {
-      autofocusBtn.addEventListener('click', () => {
-          if (currentCameraSettings && selectedCameraId !== null) {
-              updateCameraSetting('autofocus', !currentCameraSettings.autofocus);
-          } else {
-              alert("Select a camera; settings not loaded.");
-          }
-      });
+  // Event Listeners for new settings controls (checkboxes)
+  // Event Listeners for new settings controls (checkboxes) - now only update local state if needed
+  // Or simply rely on handleSaveAllSettings to read current values.
+  // For simplicity, we'll let handleSaveAllSettings read directly from elements.
+  // If immediate reflection in currentCameraSettings object is needed before save, add listeners like:
+  // if (settingNightVision) {
+  //     settingNightVision.addEventListener('change', (e) => {
+  //         if (currentCameraSettings) currentCameraSettings.night_vision = e.target.checked;
+  //     });
+  // }
+  // (This is optional for now, as handleSaveAllSettings reads from DOM elements directly)
+
+  async function handleSaveAllSettings() {
+    if (!saveCameraSettingsButton || saveCameraSettingsButton.disabled || selectedCameraId === null) {
+        showAppMessage("Please select a camera.", "error");
+        return;
+    }
+
+    const settingsToUpdate = {};
+
+    if (settingResolution) settingsToUpdate.resolution = settingResolution.value;
+    if (settingBrightness) settingsToUpdate.brightness = parseInt(settingBrightness.value, 10);
+    if (settingContrast) settingsToUpdate.contrast = parseInt(settingContrast.value, 10);
+    if (settingSaturation) settingsToUpdate.saturation = parseInt(settingSaturation.value, 10);
+    if (settingSharpness) settingsToUpdate.sharpness = parseInt(settingSharpness.value, 10);
+
+    if (settingNightVision) settingsToUpdate.night_vision = settingNightVision.checked;
+    if (settingAutofocus) settingsToUpdate.autofocus = settingAutofocus.checked;
+    if (settingMicrophoneEnabled) settingsToUpdate.microphone_enabled = settingMicrophoneEnabled.checked;
+    if (settingObjectDetectionEnabled) settingsToUpdate.object_detection_enabled = settingObjectDetectionEnabled.checked;
+
+    if (settingMotionDetectionEnabled) settingsToUpdate.motion_detection_enabled = settingMotionDetectionEnabled.checked;
+    if (settingMotionSensitivity) settingsToUpdate.motion_sensitivity = parseInt(settingMotionSensitivity.value, 10);
+    if (settingMotionMinArea) settingsToUpdate.motion_min_area = parseInt(settingMotionMinArea.value, 10);
+    if (settingRecordOnMotion) settingsToUpdate.record_on_motion = settingRecordOnMotion.checked;
+
+    if (Object.keys(settingsToUpdate).length > 0) {
+        await updateCameraSettingsBatch(settingsToUpdate);
+    } else {
+        showAppMessage("No settings configured to save.", "info");
+    }
   }
 
+  if (saveCameraSettingsButton) {
+    saveCameraSettingsButton.addEventListener('click', handleSaveAllSettings);
+  }
+
+  function setupRangeInputWithValueDisplay(rangeInput, valueLabel) {
+    if (rangeInput && valueLabel) {
+        valueLabel.textContent = rangeInput.value;
+        rangeInput.addEventListener('input', () => {
+            valueLabel.textContent = rangeInput.value;
+        });
+    }
+  }
+
+  setupRangeInputWithValueDisplay(settingBrightness, brightnessValueLabel);
+  setupRangeInputWithValueDisplay(settingContrast, contrastValueLabel);
+  setupRangeInputWithValueDisplay(settingSaturation, saturationValueLabel);
+  setupRangeInputWithValueDisplay(settingSharpness, sharpnessValueLabel);
+  setupRangeInputWithValueDisplay(settingMotionSensitivity, motionSensitivityValueLabel);
 
   // Initial UI state update based on stored token
   updateUIForAuthState();

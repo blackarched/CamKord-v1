@@ -41,13 +41,89 @@
             <p id="app-message-text" style="margin: 0; font-weight: bold;"></p>
         </div>
 
-        <section id="camera-controls" class="cyber-tile ac-yellow fg-yellow cyber-razor-top" style="background-color: rgba(30,30,40,0.85); padding:15px; margin-bottom:20px;">
-          <h2 class="cyber-h cyberpunk-font-og ac-yellow" style="width:auto; margin-bottom:20px;">SYSTEM CONTROLS</h2>
-          <div class="control-buttons" style="display: flex; flex-wrap: wrap; gap: 10px;">
-            <button id="refresh-feed" class="cyber-button-small cyberpunk-font bg-cyan fg-black ac-black" data-text="RFRSH" style="margin: 5px;">Refresh Feed<span class="tag">F5</span></button>
-            <button id="toggle-night-vision" class="cyber-button-small cyberpunk-font bg-cyan fg-black ac-black" data-text="NV" style="margin: 5px;">Night Vision<span class="tag">N</span></button>
-            <button id="toggle-autofocus" class="cyber-button-small cyberpunk-font bg-cyan fg-black ac-black" data-text="AF" style="margin: 5px;">Auto Focus<span class="tag">A</span></button>
-          </div>
+        <div class="control-buttons" style="margin-bottom: 20px; text-align:right;">
+             <button id="refresh-feed" class="cyber-button-small cyberpunk-font bg-blue fg-white ac-white" data-text="RFRSH">Refresh Feed<span class="tag">F5</span></button>
+        </div>
+
+        <section id="camera-settings-panel" class="cyber-tile bg-dark-transparent ac-green fg-green cyber-razor-top" style="background-color: rgba(20,35,30,0.9); padding:20px; margin-bottom:20px;">
+            <h2 class="cyber-h cyberpunk-font-og ac-green" style="width:auto; margin-bottom:25px;">CAMERA CONFIGURATION :: ID <span id="selected-camera-id-display">N/A</span></h2>
+
+            <div class="settings-form-layout" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+
+                <fieldset class="cyber-fieldset ac-cyan" style="border-color: var(--cyan);">
+                    <legend class="cyberpunk-font fg-cyan">Image & Display</legend>
+
+                    <div class="cyber-input-container">
+                        <label for="setting-resolution" class="cyberpunk-font">Resolution:</label>
+                        <div class="cyber-select ac-cyan fg-cyan" style="width:100%;">
+                            <select id="setting-resolution">
+                                <option value="640x480">640x480</option>
+                                <option value="1280x720" selected>1280x720</option>
+                                <option value="1920x1080">1920x1080</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="cyber-input-container">
+                        <label for="setting-brightness" class="cyberpunk-font">Brightness (<span id="brightness-value-label">50</span>):</label>
+                        <input type="range" id="setting-brightness" min="0" max="100" value="50" class="cyber-range ac-cyan">
+                    </div>
+                    <div class="cyber-input-container">
+                        <label for="setting-contrast" class="cyberpunk-font">Contrast (<span id="contrast-value-label">50</span>):</label>
+                        <input type="range" id="setting-contrast" min="0" max="100" value="50" class="cyber-range ac-cyan">
+                    </div>
+                    <div class="cyber-input-container">
+                        <label for="setting-saturation" class="cyberpunk-font">Saturation (<span id="saturation-value-label">50</span>):</label>
+                        <input type="range" id="setting-saturation" min="0" max="100" value="50" class="cyber-range ac-cyan">
+                    </div>
+                    <div class="cyber-input-container">
+                        <label for="setting-sharpness" class="cyberpunk-font">Sharpness (<span id="sharpness-value-label">50</span>):</label>
+                        <input type="range" id="setting-sharpness" min="0" max="100" value="50" class="cyber-range ac-cyan">
+                    </div>
+                </fieldset>
+
+                <fieldset class="cyber-fieldset ac-yellow" style="border-color: var(--yellow);">
+                    <legend class="cyberpunk-font fg-yellow">Features</legend>
+                    <div class="cyber-checkbox-container">
+                        <input type="checkbox" id="setting-night-vision" class="cyber-check ac-yellow"><label for="setting-night-vision" class="cyberpunk-font">Night Vision</label>
+                    </div>
+                    <div class="cyber-checkbox-container">
+                        <input type="checkbox" id="setting-autofocus" class="cyber-check ac-yellow"><label for="setting-autofocus" class="cyberpunk-font">Auto Focus</label>
+                    </div>
+                    <div class="cyber-checkbox-container">
+                        <input type="checkbox" id="setting-microphone-enabled" class="cyber-check ac-yellow"><label for="setting-microphone-enabled" class="cyberpunk-font">Microphone</label>
+                    </div>
+                     <div class="cyber-checkbox-container">
+                        <input type="checkbox" id="setting-object-detection-enabled" class="cyber-check ac-yellow"><label for="setting-object-detection-enabled" class="cyberpunk-font">Object Detection</label>
+                    </div>
+                </fieldset>
+
+                <fieldset class="cyber-fieldset ac-red" style="border-color: var(--red);">
+                    <legend class="cyberpunk-font fg-red">Motion Detection</legend>
+                    <div class="cyber-checkbox-container">
+                        <input type="checkbox" id="setting-motion-detection-enabled" class="cyber-check ac-red"><label for="setting-motion-detection-enabled" class="cyberpunk-font">Enable</label>
+                    </div>
+                    <div class="cyber-input-container">
+                        <label for="setting-motion-sensitivity" class="cyberpunk-font">Sensitivity (<span id="motion-sensitivity-value-label">30</span>):</label>
+                        <input type="range" id="setting-motion-sensitivity" min="0" max="100" value="30" class="cyber-range ac-red">
+                    </div>
+                    <div class="cyber-input-container">
+                        <label for="setting-motion-min-area" class="cyberpunk-font">Min. Area:</label>
+                        <div class="cyber-input ac-red fg-red" style="width:100%;">
+                             <input type="number" id="setting-motion-min-area" min="100" max="10000" step="50" value="500">
+                        </div>
+                    </div>
+                    <div class="cyber-checkbox-container">
+                        <input type="checkbox" id="setting-record-on-motion" class="cyber-check ac-red"><label for="setting-record-on-motion" class="cyberpunk-font">Record on Motion</label>
+                    </div>
+                </fieldset>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button id="save-camera-settings" class="cyber-button bg-green fg-black ac-black cyberpunk-font" data-text="COMMIT">
+                    Apply Configuration <span class="tag">S</span>
+                </button>
+            </div>
         </section>
 
         <section id="live-feed" class="cyber-tile bg-black ac-cyan fg-cyan cyber-razor-top" style="padding:15px; margin-bottom:20px;">
