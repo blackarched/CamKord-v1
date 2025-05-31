@@ -124,6 +124,67 @@ CamKord-v1/
     *   Swagger UI (interactive API docs): `http://localhost:8000/docs`
     *   ReDoc (alternative API docs): `http://localhost:8000/redoc`
 
+### Database Migrations (Alembic)
+
+This project uses [Alembic](https://alembic.sqlalchemy.org/) to manage database schema migrations. This allows your database schema to evolve along with changes to the application's SQLAlchemy models (defined in `app/database.py`).
+
+**Initial Database Setup with Alembic:**
+
+If you are setting up the project for the first time, or connecting to a new empty database:
+
+1.  **Configure `DATABASE_URL`:** Ensure your `DATABASE_URL` (in your startup script or environment) points to your target database.
+2.  **Navigate to the `app` directory:** All Alembic commands should typically be run from the `CamCord/v1/app/` directory, as this is where `alembic.ini` is located.
+    ```bash
+    cd CamCord/v1/app  # Or your equivalent path to the 'app' directory
+    ```
+3.  **Stamp the database with the latest revision (if models already match initial migration):**
+    If an initial migration script representing all current tables already exists in `app/alembic/versions/` (e.g., from previous setup or by another developer), and your database is currently empty but you want it to be set up *as if* all migrations up to 'head' have run, you can "stamp" it:
+    ```bash
+    alembic stamp head
+    ```
+    Then, the `init_db()` function called on application startup (from `app/main.py`) will create all tables based on the current models. Stamping prevents Alembic from trying to run old migrations on a DB that `init_db()` will fully create.
+    Alternatively, if you want Alembic to create the tables from an initial migration script:
+
+4.  **Generating an Initial Migration (if no migration script exists yet for current models):**
+    If there are no migration scripts in `app/alembic/versions/` or if you want to generate one from scratch based on current models:
+    ```bash
+    alembic revision -m "Create initial database schema based on current models" --autogenerate
+    ```
+    *   This command compares the models defined in `app.database.Base.metadata` with the target database (if any tables exist) and generates a new script in `app/alembic/versions/`.
+    *   **Important:** Always open and review the generated script. Alembic's autogenerate is powerful but might not capture every nuance perfectly, especially for complex constraints or custom types. You may need to edit the script.
+
+5.  **Apply Migrations to Create Schema:**
+    To apply all migrations (or the initial one you just generated) to your database, creating all tables:
+    ```bash
+    alembic upgrade head
+    ```
+    This will bring your database schema to the state defined by the latest migration script. (Note: The `init_db()` function in `app/main.py` also calls `Base.metadata.create_all(engine)`, which creates tables if they don't exist. For a new setup, either `init_db()` or `alembic upgrade head` can create the tables. Using Alembic from the start is good practice for schema versioning.)
+
+**Managing Schema Changes (After Initial Setup):**
+
+Whenever you modify your SQLAlchemy models in `app/database.py` (e.g., add a new table, add/remove a column):
+
+1.  **Navigate to `CamCord/v1/app/`**.
+2.  **Generate a new migration script:**
+    ```bash
+    alembic revision -m "Your concise description of model changes (e.g., add_email_to_users_table)" --autogenerate
+    ```
+3.  **Review and edit the generated script** in `app/alembic/versions/` for correctness and completeness.
+4.  **Apply the migration to your database:**
+    ```bash
+    alembic upgrade head
+    ```
+
+**Other Useful Alembic Commands (from `CamCord/v1/app/`):**
+
+*   `alembic current`: Show the current revision of the database.
+*   `alembic history`: Show the migration history.
+*   `alembic downgrade -1`: Downgrade by one revision.
+*   `alembic downgrade <revision_id>`: Downgrade to a specific revision.
+*   `alembic upgrade <revision_id>`: Upgrade to a specific revision.
+
+Using Alembic consistently ensures your database schema is version-controlled and can be reliably updated alongside your application code.
+
 ## Key Environment Variables
 
 The application behavior can be customized via environment variables set in the startup scripts or your system environment. Key variables are defined in `CamCord/v1/app/config.py` and include:
@@ -194,7 +255,7 @@ This application can be easily deployed using Docker. A `Dockerfile` is provided
     *   **Object Detection Models:** Place model files (`yolov4-tiny.cfg`, `yolov4-tiny.weights`, `coco.names`) into `CamCord/v1/app/models/` on your host if building into the image. Alternatively, mount as a volume.
 
 **3. Build the Docker Image:**
-Navigate to the `CamKord/v1/` directory (where the `Dockerfile` is located) and run:
+Navigate to the `CamCord/v1/` directory (where the `Dockerfile` is located) and run:
 ```bash
 docker build -t camkord-app .
 ```

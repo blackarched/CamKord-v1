@@ -4,20 +4,20 @@ import os
 import cv2
 import time
 import asyncio
-import io # Added for StreamingResponse
+import io
 from typing import List, Optional
-from fastapi import APIRouter, FastAPI, Depends, HTTPException, Request
+from fastapi import APIRouter, FastAPI, Depends, HTTPException, Request, status # Added status
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 
-from database import SessionLocal, init_db # init_db call is commented out below
-from database import User, EventLog, CameraSettings as DBCameraSettings # Ensure DBCameraSettings is imported
+from database import SessionLocal, init_db
+from database import User as DBUser, EventLog, CameraSettings as DBCameraSettings, Camera as DBCamera # Added DBCamera, aliased User
 from .user_auth_backend import get_current_user
 from .camera_manager import CameraManager
 from .main import get_camera_manager_dependency, limiter
-from .schemas import CameraSettingsUpdate, CameraInfo, CameraSettingsResponse
+from .schemas import CameraSettingsUpdate, CameraInfo, CameraSettingsResponse, CameraCreate, CameraResponse, CameraUpdate # Added CameraUpdate
 from .config import settings
-from .crypto_utils import get_fernet_instance, encrypt_data, decrypt_data # Added decrypt_data
+from .crypto_utils import get_fernet_instance, encrypt_data, decrypt_data
 
 # --- Initialize database ---
 # init_db() # This should ideally be called once at startup, e.g. in main.py, not here.
@@ -260,6 +260,166 @@ async def view_encrypted_snapshot(
         raise HTTPException(status_code=500, detail="Snapshot decryption failed. File may be corrupt or key incorrect.")
 
     return StreamingResponse(io.BytesIO(decrypted_bytes), media_type="image/jpeg")
+
+@router.post(
+    "/admin/cameras/",
+    response_model=CameraResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Admin - Cameras"]
+)
+def create_new_camera_admin(
+    camera_data: CameraCreate,
+    db: Session = Depends(get_db),
+    current_admin_user: DBUser = Depends(get_current_user),
+    cm: CameraManager = Depends(get_camera_manager_dependency)
+):
+    if not current_admin_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted: Requires admin privileges."
+        )
+
+    if camera_data.name:
+        existing_camera_name = db.query(DBCamera).filter(DBCamera.name == camera_data.name).first()
+        if existing_camera_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Camera name '{camera_data.name}' already exists."
+            )
+    if camera_data.rtsp_url:
+        existing_camera_url = db.query(DBCamera).filter(DBCamera.rtsp_url == camera_data.rtsp_url).first()
+        if existing_camera_url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"RTSP URL '{camera_data.rtsp_url}' is already in use."
+            )
+
+    db_camera = DBCamera(
+        name=camera_data.name,
+        location=camera_data.location,
+        rtsp_url=camera_data.rtsp_url,
+        is_active=camera_data.is_active
+    )
+    db.add(db_camera)
+    db.commit()
+
+    default_settings = DBCameraSettings(
+        camera_id=db_camera.id,
+        resolution= "1280x720",
+        night_vision=False,
+        autofocus=True,
+        brightness=50,
+        contrast=50,
+        saturation=50,
+        sharpness=50,
+        microphone_enabled=True,
+        motion_detection_enabled=False,
+        motion_sensitivity=30,
+        motion_min_area=500,
+        record_on_motion=False,
+        object_detection_enabled=False
+    )
+    db.add(default_settings)
+    db.commit()
+    db.refresh(db_camera)
+
+    if db_camera.is_active:
+        cm.reload_cameras_from_db()
+
+    return db_camera
+
+@router.put(
+    "/admin/cameras/{camera_id}",
+    response_model=CameraResponse,
+    tags=["Admin - Cameras"]
+)
+def update_camera_admin(
+    camera_id: int,
+    camera_update_data: CameraUpdate, # Uses CameraUpdate schema for request body
+    db: Session = Depends(get_db),
+    current_admin_user: DBUser = Depends(get_current_user),
+    cm: CameraManager = Depends(get_camera_manager_dependency)
+):
+    if not current_admin_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted: Requires admin privileges."
+        )
+
+    db_camera = db.query(DBCamera).filter(DBCamera.id == camera_id).first()
+    if not db_camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Camera with ID {camera_id} not found.")
+
+    update_data = camera_update_data.dict(exclude_unset=True) # Only get fields that were actually sent
+
+    # Check for potential duplicate name if 'name' is in update_data and is different
+    if 'name' in update_data and update_data['name'] != db_camera.name:
+        existing_camera_name = db.query(DBCamera).filter(DBCamera.name == update_data['name'], DBCamera.id != camera_id).first()
+        if existing_camera_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Another camera with the name '{update_data['name']}' already exists."
+            )
+
+    # Check for potential duplicate RTSP URL if 'rtsp_url' is in update_data, is not None, and is different
+    if 'rtsp_url' in update_data and update_data.get('rtsp_url') and update_data['rtsp_url'] != db_camera.rtsp_url:
+        existing_camera_url = db.query(DBCamera).filter(DBCamera.rtsp_url == update_data['rtsp_url'], DBCamera.id != camera_id).first()
+        if existing_camera_url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Another camera with the RTSP URL '{update_data['rtsp_url']}' already exists."
+            )
+
+    # Apply updates
+    for field, value in update_data.items():
+        if hasattr(db_camera, field):
+            setattr(db_camera, field, value)
+
+    db.add(db_camera)
+    db.commit()
+    db.refresh(db_camera)
+
+    cm.reload_cameras_from_db()
+
+    return db_camera
+
+@router.delete(
+    "/admin/cameras/{camera_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Admin - Cameras"]
+)
+def delete_camera_admin(
+    camera_id: int,
+    db: Session = Depends(get_db),
+    current_admin_user: DBUser = Depends(get_current_user),
+    cm: CameraManager = Depends(get_camera_manager_dependency)
+):
+    if not current_admin_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted: Requires admin privileges."
+        )
+
+    db_camera = db.query(DBCamera).filter(DBCamera.id == camera_id).first()
+    if not db_camera:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Camera with ID {camera_id} not found.")
+
+    managed_cam = cm.get_camera(camera_id)
+    if managed_cam:
+        print(f"[Admin Delete] Camera {camera_id} found in CameraManager. Releasing its resources.")
+        managed_cam.release()
+
+    # Delete the camera from the database.
+    # Associated CameraSettings and EventLogs should be deleted automatically
+    # due to "cascade='all, delete-orphan'" on the relationships in DBCamera model.
+    db.delete(db_camera)
+    db.commit()
+
+    print(f"Camera {camera_id} and its associated settings/logs (due to cascade) deleted from database.")
+
+    cm.reload_cameras_from_db()
+
+    return None
 
 @router.post("/cameras/{camera_id}/recording/start", tags=["Cameras"])
 @limiter.limit("15/minute")

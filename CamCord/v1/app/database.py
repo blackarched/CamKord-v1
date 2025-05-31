@@ -70,7 +70,7 @@ class Camera(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     # Relationships for Camera
-    logs = relationship("EventLog", back_populates="camera")
+    logs = relationship("EventLog", back_populates="camera", cascade="all, delete-orphan")
     settings = relationship("CameraSettings", back_populates="camera", uselist=False, cascade="all, delete-orphan")
 
 
