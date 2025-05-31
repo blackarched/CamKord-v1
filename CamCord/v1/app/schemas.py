@@ -146,3 +146,17 @@ class DashboardStatus(BaseModel):
     active_streams: int
     errors_today: int
     last_event: Optional[str]
+
+
+# ========== RECORDING SCHEMAS ==========
+
+class RecordingInfo(BaseModel):
+    filename: str
+    size: int  # In bytes
+    timestamp: datetime # File modification timestamp
+    camera_id: Optional[int] = None
+    camera_name: Optional[str] = None
+    # duration: Optional[float] = None # Future: parse video duration
+
+    class Config:
+        orm_mode = True

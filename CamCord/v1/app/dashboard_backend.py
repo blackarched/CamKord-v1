@@ -6,8 +6,9 @@ import time
 import asyncio
 import io
 from typing import List, Optional
-from fastapi import APIRouter, FastAPI, Depends, HTTPException, Request, status # Added status
-from fastapi.responses import StreamingResponse, JSONResponse
+from datetime import datetime, date
+from fastapi import APIRouter, FastAPI, Depends, HTTPException, Request, status, Query
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse # Added FileResponse
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, init_db
@@ -15,7 +16,7 @@ from database import User as DBUser, EventLog, CameraSettings as DBCameraSetting
 from .user_auth_backend import get_current_user
 from .camera_manager import CameraManager
 from .main import get_camera_manager_dependency, limiter
-from .schemas import CameraSettingsUpdate, CameraInfo, CameraSettingsResponse, CameraCreate, CameraResponse, CameraUpdate # Added CameraUpdate
+from .schemas import CameraSettingsUpdate, CameraInfo, CameraSettingsResponse, CameraCreate, CameraResponse, CameraUpdate, RecordingInfo # Added RecordingInfo
 from .config import settings
 from .crypto_utils import get_fernet_instance, encrypt_data, decrypt_data
 
@@ -461,6 +462,197 @@ async def stop_camera_recording_api(
     else:
         # This case might be rare if stop_recording is robust
         raise HTTPException(status_code=500, detail="Failed to stop recording cleanly. Check server logs.")
+
+@router.get("/recordings", response_model=List[RecordingInfo], tags=["Recordings"])
+# @limiter.limit("120/minute") # Example: if specific rate limit needed
+def list_recordings(
+    request: Request, # Required by limiter, good to have for extensions
+    camera_id_filter: Optional[int] = Query(None, description="Filter by camera ID", alias="camera_id"),
+    date_start_filter: Optional[date] = Query(None, description="Filter by start date (YYYY-MM-DD)", alias="date_start"),
+    date_end_filter: Optional[date] = Query(None, description="Filter by end date (YYYY-MM-DD)", alias="date_end"),
+    db: Session = Depends(get_db), # To fetch camera names
+    current_user: DBUser = Depends(get_current_user) # Authentication
+):
+    recordings_list = []
+    recording_dir = settings.RECORDING_DIR
+
+    if not os.path.exists(recording_dir) or not os.path.isdir(recording_dir):
+        print(f"Warning: Recording directory '{recording_dir}' not found or is not a directory.")
+        return [] # Return empty list if directory doesn't exist
+
+    # Fetch all camera names once for efficient lookup
+    cameras_db = db.query(DBCamera.id, DBCamera.name).all()
+    camera_name_map = {cam_id: cam_name for cam_id, cam_name in cameras_db}
+
+    try:
+        filenames = os.listdir(recording_dir)
+    except OSError as e:
+        print(f"Error listing recording directory '{recording_dir}': {e}")
+        raise HTTPException(status_code=500, detail="Could not read recordings directory.")
+
+    for filename in filenames:
+        if not filename.lower().endswith(".mp4"): # Case-insensitive check for .mp4
+            continue
+
+        file_path = os.path.join(recording_dir, filename)
+
+        try:
+            if not os.path.isfile(file_path): # Ensure it's a file
+                continue
+
+            stat_info = os.stat(file_path)
+            file_size_bytes = stat_info.st_size
+            file_mtime = datetime.fromtimestamp(stat_info.st_mtime)
+
+            # Apply date filtering (inclusive)
+            if date_start_filter and file_mtime.date() < date_start_filter:
+                continue
+            if date_end_filter and file_mtime.date() > date_end_filter:
+                continue
+
+            parsed_cam_id: Optional[int] = None
+            # Try to parse camera ID from filename format: rec_cam<ID>_<timestamp>.mp4
+            if filename.startswith("rec_cam") and "_" in filename:
+                parts = filename.split("_")
+                if len(parts) > 1 and parts[1].startswith("cam"):
+                    cam_id_str = parts[1][3:] # Remove "cam" prefix
+                    if cam_id_str.isdigit():
+                        parsed_cam_id = int(cam_id_str)
+
+            # Apply camera_id filter
+            if camera_id_filter is not None and parsed_cam_id != camera_id_filter:
+                continue
+
+            camera_name = camera_name_map.get(parsed_cam_id) if parsed_cam_id is not None else "Unknown"
+
+            recordings_list.append(
+                RecordingInfo(
+                    filename=filename,
+                    size=file_size_bytes,
+                    timestamp=file_mtime,
+                    camera_id=parsed_cam_id,
+                    camera_name=camera_name
+                )
+            )
+        except FileNotFoundError:
+            # File might have been deleted by another process between listdir and stat
+            print(f"Warning: File '{filename}' vanished during processing, skipping.")
+            continue
+        except Exception as e:
+            # Catch other potential errors during file processing
+            print(f"Error processing recording file '{filename}': {e}")
+            continue
+
+    # Sort recordings by timestamp, newest first
+    recordings_list.sort(key=lambda r: r.timestamp, reverse=True)
+
+    return recordings_list
+
+@router.get(
+    "/recordings/view/{filename}",
+    response_class=FileResponse,
+    tags=["Recordings"],
+    summary="Stream or download a specific recording file.",
+    description="Serves a video recording file. Requires authentication. " \
+                "Filename should be a valid .mp4 file found in the recordings directory. " \
+                "Clients (like HTML5 video player) can use this endpoint for streaming playback."
+)
+async def view_recording_file(
+    filename: str,
+    request: Request,
+    current_user: DBUser = Depends(get_current_user)
+):
+    if ".." in filename or filename.startswith(("/", "\\")) or not filename.lower().endswith(".mp4"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename. Must be a .mp4 file and not contain path traversal elements."
+        )
+
+    file_path = os.path.join(settings.RECORDING_DIR, filename)
+
+    if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        print(f"Recording file not found at path: {file_path}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Recording '{filename}' not found.")
+
+    print(f"User '{current_user.username}' (ID: {current_user.id}) is accessing recording: {filename}")
+
+    return FileResponse(
+        path=file_path,
+        media_type="video/mp4",
+        filename=filename
+    )
+
+@router.delete(
+    "/recordings/{filename}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Recordings"],
+    summary="Delete a specific recording file.",
+    description="Deletes a video recording file from the server's storage. Requires admin privileges."
+)
+async def delete_recording_file(
+    filename: str,
+    request: Request,
+    current_admin_user: DBUser = Depends(get_current_user),
+    cm: CameraManager = Depends(get_camera_manager_dependency)
+):
+    if not current_admin_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted: Requires admin privileges."
+        )
+
+    if ".." in filename or filename.startswith(("/", "\\")) or not filename.lower().endswith(".mp4"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid filename. Must be an .mp4 file and not contain path traversal elements."
+        )
+
+    file_path = os.path.join(settings.RECORDING_DIR, filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Recording '{filename}' not found.")
+
+    if not os.path.isfile(file_path):
+         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{filename}' is not a valid file.")
+
+    parsed_cam_id: Optional[int] = None
+    if filename.startswith("rec_cam") and "_" in filename:
+        parts = filename.split("_")
+        if len(parts) > 1 and parts[1].startswith("cam"):
+            cam_id_str = parts[1][3:]
+            if cam_id_str.isdigit():
+                parsed_cam_id = int(cam_id_str)
+
+    try:
+        os.remove(file_path)
+        print(f"User '{current_admin_user.username}' (ID: {current_admin_user.id}) deleted recording: {filename}")
+
+        cm.record_camera_event(
+            camera_id=parsed_cam_id,
+            event_type="recording_deleted",
+            description=f"File: {filename} deleted by admin '{current_admin_user.username}'."
+        )
+
+        return None
+
+    except OSError as e:
+        error_message = f"Could not delete recording '{filename}': {e.strerror} (OS Error {e.errno})"
+        print(f"[Delete Recording Error] {error_message}")
+        cm.record_camera_event(
+            camera_id=parsed_cam_id,
+            event_type="recording_delete_failed",
+            description=f"Attempt by admin '{current_admin_user.username}' to delete file: {filename}. Error: {e.strerror}"
+        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_message)
+    except Exception as e:
+        error_message = f"An unexpected error occurred while deleting recording '{filename}': {str(e)}"
+        print(f"[Delete Recording Error] {error_message}")
+        cm.record_camera_event(
+            camera_id=parsed_cam_id,
+            event_type="recording_delete_failed",
+            description=f"Attempt by admin '{current_admin_user.username}' to delete file: {filename}. Error: {str(e)}"
+        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_message)
 
 --- Application Mounting ---
 # The following app instance is for standalone running of this dashboard,
